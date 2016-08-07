@@ -1,0 +1,28 @@
+CONFIG = {
+    'nick'                  => 'ZbojeiJureq',
+    'auth' => {
+      'user'        => '',
+      'password'    => ''
+    },
+
+    'channels'              => ['#kx'],
+    'server'                => 'localhost',
+    'verbose'               => true,
+    'message_per_second'    => 1,
+
+
+    'talkdb_upload_delay'   => 3600,
+    'maindb_upload_delay'   => 3600,
+    'nick_check_delay'      => 300,
+
+    'ftp_upload'            => false,
+    'ftp_login'             => '',
+    'ftp_password'          => '',
+    'ftp_host'              => 'ftp.server.com',
+    'ftp_path'              => '',
+
+    'dropbox_upload'        => false,
+    'dropbox_path'          => 'z:\\Dropbox',
+
+    'wunderground_api_key'  => 'YOUR_API_KEY'
+}

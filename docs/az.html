@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<title>az help</title>
+
+<xmp theme="united" style="display:none;">
+# az
+
+az plugin manages the az irc game. A word from a dictionary is randomly chosen, and players are supposed to guess the word.
+
+
+## Commands
+### .az
+starts a new az game
+
+### .az ez
+starts a new easy az game with the word drawn from limited vocabulary
+
+### .az top [n]
+shows the top n player stats. n is optional 
+
+### .az stop
+ends the game
+
+### .az hint
+presents a hint.
+hints are available after 10 tries
+
+## Scores
+The winning score for a non-ez game is calculated as follows:
+(100*exp(-(n-1)**2/50**2)).ceil + p  
+where  
+<ul><li>n is the number of total tries within the game</li>
+<li>p is the number of players that guessed any word during the game</li>
+</ul>
+ez game scores are divided by 2 
+</xmp>
+
+<script src="http://strapdownjs.com/v/0.2/strapdown.js"></script>
+</html>

@@ -26,7 +26,7 @@ class CorePlugin
   end
 
   def nick_check
-    @nick = CONFIG['nick'] if @bot.nick != CONFIG['nick']
+    @bot.nick = CONFIG['nick'] if @bot.nick != CONFIG['nick']
   end
 
 

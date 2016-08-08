@@ -38,7 +38,7 @@ class UnoPlugin
   match /uno casual/,   group: :uno, method: :start_casual
   match /uno reload/,   group: :uno, method: :reload
   match /uno stop/,     group: :uno, method: :stop
-  match /uno top [1-5]/,      group: :uno, method: :top
+  match /uno top ([1-5])/,      group: :uno, method: :top
   match /uno top$/,      group: :uno, method: :top
   match /uno debug (.*)/,    group: :uno, method: :debug
   match /uno score$/,   group: :uno, method: :own_score

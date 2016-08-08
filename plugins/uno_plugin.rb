@@ -38,7 +38,8 @@ class UnoPlugin
   match /uno casual/,   group: :uno, method: :start_casual
   match /uno reload/,   group: :uno, method: :reload
   match /uno stop/,     group: :uno, method: :stop
-  match /uno top/,      group: :uno, method: :top
+  match /uno top [1-5]/,      group: :uno, method: :top
+  match /uno top$/,      group: :uno, method: :top
   match /uno debug (.*)/,    group: :uno, method: :debug
   match /uno score$/,   group: :uno, method: :own_score
   match /uno score ([A-z0-9_\-]+)/,    group: :uno, method: :score
@@ -182,7 +183,7 @@ class UnoPlugin
     m.reply '   ' + "nick".ljust(20) + 'points  games  average  wins  winrate - full list: http://uno.kaiks.eu '
     #SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) sr FROM uno WHERE nick LIKE ' $+ %safe_nick $+ ' AND games >= 2 ORDER BY %by %ord LIMIT %count
     #UNODB[:uno].where('games > 2').select_append('ROUND(CAST(total_score as FLOAT)/CAST(games AS FLOAT,2)').order(Sequel.desc(5)).limit(n).each { |row|
-    UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE games >= 2 ORDER BY 5 DESC LIMIT ?', n].each { |row|
+    UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE games >= 10 ORDER BY 5 DESC LIMIT ?', n].each { |row|
       counter += 1
       values = row.values
       if values[0].to_s.length > 0

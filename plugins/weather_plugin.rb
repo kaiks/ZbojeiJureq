@@ -32,7 +32,7 @@ class WeatherPlugin
 
   def register m, location
     user = WeatherUser.find(:nick => m.user.nick)
-    user ||= WeatherUser.create(:nick => m.user.nick)
+    user ||= WeatherUser.create(:nick => m.user.nick, :weather_string => location)
     user.weather_string = location
     user.save
     m.reply "Done."

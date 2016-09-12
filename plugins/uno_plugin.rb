@@ -31,7 +31,7 @@ class UnoPlugin
   match /^pl ([A-z0-9+]{1,6})$/,   group: :uno, method: :play, use_prefix: false
 
 
-  match /^tu$/,           group: :uno, method: :cd
+  match /^tu$/,           group: :uno, method: :cd, use_prefix: false
 
   match /uno quit/,     group: :uno, method: :temp
 
@@ -137,8 +137,9 @@ class UnoPlugin
       else
         card = @game.players[0].hand.reverse.find_card(card_text)
       end
-      puts "propo card text -------->" + proposed_card_text
-      @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text)) #rescue m.reply "Not a valid card"
+      puts "Proposed card text: " + proposed_card_text
+      success = @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
+	  card.unset_wild_color unless success
     end
   end
 

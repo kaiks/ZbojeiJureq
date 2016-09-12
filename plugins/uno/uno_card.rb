@@ -37,7 +37,7 @@ class UnoCard
     card_text = card_text.downcase
     text_length = card_text.length
 
-    return UnoCard.parse_wild(card_text) if card_text[0].downcase == 'w'
+    return UnoCard.parse_wild(card_text) if card_text[0] == 'w'
 
     short_color = card_text[0]
     short_figure = card_text[1..2]
@@ -90,7 +90,7 @@ class UnoCard
     @color = color if special_valid_card?
   end
   
-  def unset_wild_color(color)
+  def unset_wild_color
     @color = :wild if special_valid_card?
   end
 

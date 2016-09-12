@@ -259,13 +259,13 @@ class UnoGame
     if @players[0] == player
       if card.nil?
         notify "You do not have that card."
-        return
+        return false
       end
       if playable_now? card
         #todo: fix the wd4 stuff
         if @already_picked == true && (@picked_card.to_s != card.to_s && @picked_card.to_s != 'wd4')
           notify 'Sorry, you have to play the card you picked.'
-          return
+          return false
         end
 
         put_card_on_top card
@@ -294,14 +294,16 @@ class UnoGame
         else
           next_turn
         end
-
+		return true
       else
         notify "Sorry #{player}, that card doesn't play."
         card.set_wild_color :wild
+		false
       end
     else
       notify "It's not your turn."
       card.set_wild_color :wild
+	  false
     end
 
   end

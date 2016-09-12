@@ -14,6 +14,7 @@ class OwnRecord < Sequel::Model(:own)
   end
 
   def time
+    last_owned_time ||= nil
     Time.parse(last_owned_time)
   end
 

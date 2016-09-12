@@ -116,7 +116,8 @@ class UnoGame
   def check_for_empty_stack
     if @card_stack.empty?
       notify 'Reshuffling discard pile.'
-      @card_stack << @played_cards
+      @played_cards.each{ |c| c.unset_wild_color }
+	  @card_stack << @played_cards
       @played_cards = CardStack.new
       @card_stack.shuffle!
     end

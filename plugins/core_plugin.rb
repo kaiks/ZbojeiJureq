@@ -4,7 +4,8 @@ class CorePlugin
   include Cinch::Plugin
 
   self.prefix = '.'
-
+  match /version\z/,      method: :version
+  match /v\z/,            method: :version
 
   def initialize(*args)
     super
@@ -29,5 +30,7 @@ class CorePlugin
     @bot.nick = CONFIG['nick'] if @bot.nick != CONFIG['nick']
   end
 
-
+  def version(m)
+    m.reply Dir.glob("**/*.*").map{|f| File.mtime(f)}.max
+  end
 end

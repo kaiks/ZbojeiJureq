@@ -4,7 +4,7 @@
 
 
 #todo: make it thread safe
-
+require 'thread'
 require './plugins/uno/uno_game.rb'
 require './plugins/uno/uno_db.rb'
 require './config.rb'
@@ -51,6 +51,7 @@ class UnoPlugin
 
   def initialize(*args)
     super
+    @semaphore = Mutex.new
     @games = {}
     @game = nil
   end
@@ -77,23 +78,27 @@ class UnoPlugin
   end
 
   def deal(m)
-    if @game.creator.to_s == m.user.nick
-      @game.start_game
-    elsif @game.game_state > 0
-      m.reply 'Cards have already been dealt.'
-    else
-      m.reply "#{@game.creator.to_s} needs to deal"
-    end
+    @semaphore.synchronize {
+      if @game.creator.to_s == m.user.nick
+        @game.start_game
+      elsif @game.game_state > 0
+        m.reply 'Cards have already been dealt.'
+      else
+        m.reply "#{@game.creator.to_s} needs to deal"
+      end
+    }
   end
 
   def join(m)
-    puts "Current players: " + @game.players.to_s
-    if @game.players.find{|p| m.user.nick==p.nick}.nil?
-      new_player = UnoPlayer.new(m.user.nick)
-      @game.add_player new_player
-    else
-      m.reply "You are already in the game, #{m.user.nick}."
-    end
+    @semaphore.synchronize {
+      puts "Current players: " + @game.players.to_s
+      if @game.players.find{|p| m.user.nick==p.nick}.nil?
+        new_player = UnoPlayer.new(m.user.nick)
+        @game.add_player new_player
+      else
+        m.reply "You are already in the game, #{m.user.nick}."
+      end
+    }
   end
 
   def order(m)
@@ -101,15 +106,19 @@ class UnoPlugin
   end
 
   def pass(m)
-    if m.user.nick == @game.players[0].nick
-      @game.turn_pass
-    end
+    @semaphore.synchronize {
+      if m.user.nick == @game.players[0].nick
+        @game.turn_pass
+      end
+    }
   end
 
   def pick(m)
-    if m.user.nick == @game.players[0].nick
-      @game.pick_single
-    end
+    @semaphore.synchronize {
+      if m.user.nick == @game.players[0].nick
+        @game.pick_single
+      end
+    }
   end
 
   def is_a_double_card_string? text
@@ -118,61 +127,69 @@ class UnoPlugin
   end
 
   def play(m)
-    if m.user.nick == @game.players[0].nick
-      proposed_card_text = m.message.split[1]
-      card_text = proposed_card_text
-      card = nil
-      #make it dry
-      if is_a_double_card_string?(proposed_card_text)
-        puts "#{proposed_card_text}"
-        card_text = proposed_card_text[0..proposed_card_text.length/2-1]
-      end
+    @semaphore.synchronize {
+      if m.user.nick == @game.players[0].nick
+        proposed_card_text = m.message.split[1]
+        card_text = proposed_card_text
+        card = nil
+        #make it dry
+        if is_a_double_card_string?(proposed_card_text)
+          puts "#{proposed_card_text}"
+          card_text = proposed_card_text[0..proposed_card_text.length/2-1]
+        end
 
-      if card_text =~ /w[rgby]/
-        card = @game.players[0].hand.reverse.find_card('w') #bug 1
-        card.set_wild_color Uno::expand_color card_text[1] unless card.nil?
-      elsif card_text =~/wd4[rgby]/
-        card = @game.players[0].hand.reverse.find_card('wd4')
-        card.set_wild_color Uno::expand_color card_text[3] unless card.nil?
-      else
-        card = @game.players[0].hand.reverse.find_card(card_text)
+        if card_text =~ /w[rgby]/
+          card = @game.players[0].hand.reverse.find_card('w') #bug 1
+          card.set_wild_color Uno::expand_color card_text[1] unless card.nil?
+        elsif card_text =~/wd4[rgby]/
+          card = @game.players[0].hand.reverse.find_card('wd4')
+          card.set_wild_color Uno::expand_color card_text[3] unless card.nil?
+        else
+          card = @game.players[0].hand.reverse.find_card(card_text)
+        end
+        puts "Proposed card text: " + proposed_card_text
+        success = @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
+      card.unset_wild_color unless success
       end
-      puts "Proposed card text: " + proposed_card_text
-      success = @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
-	  card.unset_wild_color unless success
-    end
+    }
   end
 
 
 
   def start(m)
-    if @game.nil?
-      @game = (IrcUnoGame.new m.user.nick)
-      @game.irc ||= $bot
-      @game.plugin ||= self
-      m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
-      join(m)
-    else
-      m.reply "An uno game is already being played."
-    end
+    @semaphore.synchronize {
+      if @game.nil?
+        @game = (IrcUnoGame.new m.user.nick)
+        @game.irc ||= $bot
+        @game.plugin ||= self
+        m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
+        join(m)
+      else
+        m.reply "An uno game is already being played."
+      end
+    }
   end
 
   def start_casual(m)
-    if @game.nil?
-      @game = IrcUnoGame.new m.user.nick, 1
-      @game.irc ||= bott
-      m.reply "Uno game started"
-      join(m)
-    else
-      m.reply "An uno game is already being played."
-    end
+    @semaphore.synchronize {
+      if @game.nil?
+        @game = IrcUnoGame.new m.user.nick, 1
+        @game.irc ||= bott
+        m.reply "Uno game started"
+        join(m)
+      else
+        m.reply "An uno game is already being played."
+      end
+    }
   end
 
   def stop(m)
-    @game.stop_game m.user.nick
-    @game = nil
-    m.reply 'Uno game has been stopped.'
-    upload_db
+    @semaphore.synchronize {
+      @game.stop_game m.user.nick
+      @game = nil
+      m.reply 'Uno game has been stopped.'
+      upload_db
+    }
   end
 
   def top(m, n = 5)

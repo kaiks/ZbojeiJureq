@@ -68,10 +68,20 @@ class LoggerPlugin
   ###
   def log_public_message(msg)
     time = Time.now.strftime(@msg_format)
-    @logfile.puts(sprintf( "[%{time}] <%{nick}> %{msg}",
+    begin
+      @logfile.puts(sprintf( "[%{time}] <%{nick}> %{msg}",
                            :time => time,
                            :nick => msg.user.name,
                            :msg  => msg.message))
+    rescue
+      File.close(@logfile)
+      @logfile = nil
+      @logfile = File.open(@logfile,"a+")
+      @logfile.puts(sprintf( "[%{time}] <%{nick}> %{msg}",
+                             :time => time,
+                             :nick => msg.user.name,
+                             :msg  => msg.message))
+    end
   end
 
   def find_old(m)

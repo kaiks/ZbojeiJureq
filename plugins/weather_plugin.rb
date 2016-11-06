@@ -27,7 +27,12 @@ class WeatherPlugin
   end
 
   def weather(m, city)
-    m.reply parse_weather_simple weather_query(city)
+    query_results = weather_query(city)
+    if query_results['response']['results']
+      m.reply parse_weather_results query_results['response']
+    else
+      m.reply parse_weather_simple query_results
+    end
   end
 
   def register m, location
@@ -57,6 +62,15 @@ class WeatherPlugin
     conditions = h["current_observation"]["weather"].to_s
     temp = h["current_observation"]["temp_c"].to_s
     "#{h["current_observation"]["display_location"]["full"].to_s}: #{conditions} and #{temp}°C"
+  end
+
+  def result_to_string result_hash
+    "#{result_hash['zmw']}: #{result_hash['city']}, #{result_hash['state']}, #{result_hash['country_name']}"
+  end
+
+  def parse_weather_results h
+    'Multiple locations. Use ".w zmw:[code]".
+'+  'Codes: ' + h['results'][0..3].map{|r| result_to_string(r) }.join('   ---   ')
   end
 
 

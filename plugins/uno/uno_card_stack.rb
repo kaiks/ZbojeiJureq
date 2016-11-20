@@ -32,9 +32,5 @@ class CardStack < Hand
     return to_return
   end
 
-  def empty?
-    size == 0
-  end
-
 
 end

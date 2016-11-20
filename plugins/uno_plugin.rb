@@ -9,7 +9,16 @@ require './plugins/uno/uno_game.rb'
 require './plugins/uno/uno_db.rb'
 require './config.rb'
 
+class UnoGameHistory
+  attr_accessor :stack
+  attr_accessor :players
+  attr_accessor :first_player
 
+  def initialize(stack, first_player)
+    @stack = stack
+    @first_player = first_player
+  end
+end
 
 
 class UnoPlugin
@@ -33,7 +42,8 @@ class UnoPlugin
 
   match /^tu$/,           group: :uno, method: :cd, use_prefix: false
 
-  match /uno quit/,     group: :uno, method: :temp
+  match /uno quit$/,     group: :uno, method: :temp
+  match /uno test$/,     group: :uno, method: :testing
 
   match /uno casual/,   group: :uno, method: :start_casual
   match /uno reload/,   group: :uno, method: :reload
@@ -54,12 +64,19 @@ class UnoPlugin
     @semaphore = Mutex.new
     @games = {}
     @game = nil
+    @this_game_history = nil
+    @testing = false
   end
 
   def debug(m, text)
     if m.user.has_admin_access?
       m.reply "#{eval m.message[11..1000]}"
     end
+  end
+
+  def testing(m)
+    @testing = !@testing
+    m.reply "Ok. Now set to #{@testing}"
   end
 
   def ca(m)
@@ -77,10 +94,21 @@ class UnoPlugin
     end
   end
 
+
   def deal(m)
     @semaphore.synchronize {
       if @game.creator.to_s == m.user.nick
-        @game.start_game
+        if @testing
+          if @this_game_history == nil
+            @game.start_game
+            @this_game_history = UnoGameHistory.new(@game.starting_stack, @game.first_player)
+          else
+            @game.start_game @this_game_history.stack, @this_game_history.first_player
+            @this_game_history = nil
+          end
+        else
+          @game.start_game
+        end
       elsif @game.game_state > 0
         m.reply 'Cards have already been dealt.'
       else
@@ -90,15 +118,13 @@ class UnoPlugin
   end
 
   def join(m)
-    @semaphore.synchronize {
-      puts "Current players: " + @game.players.to_s
-      if @game.players.find{|p| m.user.nick==p.nick}.nil?
-        new_player = UnoPlayer.new(m.user.nick)
-        @game.add_player new_player
-      else
-        m.reply "You are already in the game, #{m.user.nick}."
-      end
-    }
+    puts "Current players: " + @game.players.to_s
+    if @game.players.find{|p| m.user.nick==p.nick}.nil?
+      new_player = UnoPlayer.new(m.user.nick)
+      @game.add_player new_player
+    else
+      m.reply "You are already in the game, #{m.user.nick}."
+    end
   end
 
   def order(m)
@@ -149,7 +175,7 @@ class UnoPlugin
         end
         puts "Proposed card text: " + proposed_card_text
         success = @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
-      card.unset_wild_color unless success
+        @game.players[0].hand.reset_wilds
       end
     }
   end

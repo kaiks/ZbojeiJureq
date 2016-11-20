@@ -35,7 +35,7 @@ class Hand < Array
 
   def reset_wilds
 	self.each { |c|
-		unset_wild_color
+		c.unset_wild_color
 	}
   end
   

@@ -2,12 +2,15 @@
 
 require './plugins/uno/uno_card_stack.rb'
 require './plugins/uno/uno_player.rb'
+require 'thread'
 
 #game states: 0 OFF, 1 ON, 2 WAR, 3WARWD
 
 class UnoGame
   attr_reader :players, :top_card, :game_state, :creator
   attr_reader :card_stack
+  attr_reader :starting_stack, :first_player
+
   def initialize(creator, casual = 0)
     @players = []
     @stacked_cards = 0
@@ -23,11 +26,12 @@ class UnoGame
     @casual = casual
     @full_deck = CardStack.new
     @full_deck.fill
+    @semaphore = Mutex.new
     db_create_game
   end
 
 
-  def start_game
+  def start_game stack = nil, first_player = nil
     if @players.length < 2
       notify 'You need at least two players to start a game.'
       return
@@ -40,25 +44,51 @@ class UnoGame
 
     @card_stack = @full_deck.clone
 
-	loop do
-		@card_stack.shuffle!
-		break unless @card_stack[0].is_offensive?
-	end
-	
+    if stack.nil?
+      prepare_card_stack
+      @starting_stack = CardStack.new @card_stack
+    else
+      stack.reset_wilds
+      @card_stack = stack
+    end
+
     @played_cards = CardStack.new
-	
+
     top_card = @card_stack.pick(1)[0]
-    deal_cards_to_players
+
 
 
     put_card_on_top top_card
+
+    rotated = false
+
+    if first_player.nil?
+      @players.shuffle!
+      @first_player = @players[0].nick
+    else
+      if @players[0].nick == first_player
+        puts "rotate1"
+        rotated = true
+        @players.rotate! #other player has to start with same hand
+      end
+    end
+
+    deal_cards_to_players
+
     db_save_card top_card, nil
 
-    @players.shuffle!
 
     @start = Time.now.strftime("%F %T")
-
+    #@players.rotate! if rotated
+    #puts "rotate2" if rotated
     next_turn
+  end
+
+  def prepare_card_stack
+    loop do
+      @card_stack.shuffle!
+      break unless @card_stack[0].is_offensive?
+    end
   end
 
   def put_card_on_top card
@@ -92,11 +122,11 @@ class UnoGame
   end
 
   def show_player_cards player
-    notify_player player,"#{player.hand.to_irc_s}"
+    notify_player player, "#{player.hand.to_irc_s}"
   end
 
   def show_card_count
-    notify "Card count: #{@players.map {|p| p.nick + ' ' + p.hand.size.to_s}.join(', ')}"
+    notify "Card count: #{@players.map { |p| p.nick + ' ' + p.hand.size.to_s }.join(', ')}"
   end
 
   def deal_cards_to_players
@@ -107,17 +137,17 @@ class UnoGame
 
   def deal_cards_to_player p
     p.hand << @card_stack.pick(7)
-    p.hand.each {|card|
+    p.hand.each { |card|
       db_save_card card, p.to_s, 1
     }
-    p.hand.sort! {|a,b| a.to_s <=> b.to_s }
+    p.hand.sort! { |a, b| a.to_s <=> b.to_s }
   end
 
   def check_for_empty_stack
     if @card_stack.empty?
       notify 'Reshuffling discard pile.'
-      @played_cards.each{ |c| c.unset_wild_color }
-	  @card_stack << @played_cards
+      @played_cards.each { |c| c.unset_wild_color }
+      @card_stack << @played_cards
       @played_cards = CardStack.new
       @card_stack.shuffle!
     end
@@ -127,14 +157,14 @@ class UnoGame
     check_for_empty_stack
     @already_picked = true
     picked = @card_stack.pick(n)
-    picked.each {|card|
+    picked.each { |card|
       db_save_card card, p.to_s, 1
     }
 
-    notify_player(p,"You draw #{n} card#{n>1?'s':''}: #{picked.to_irc_s}")
+    notify_player(p, "You draw #{n} card#{n>1 ? 's' : ''}: #{picked.to_irc_s}")
     p.hand << picked
 
-    p.hand.sort! {|a,b| a.to_s <=> b.to_s }
+    p.hand.sort! { |a, b| a.to_s <=> b.to_s }
 
     @game_state = 1
     @stacked_cards = 0
@@ -196,7 +226,7 @@ class UnoGame
   end
 
   def rename_player old_nick, new_nick
-    @players.detect{|player| player.nick==old_nick }.nick = new_nick
+    @players.detect { |player| player.nick==old_nick }.nick = new_nick
   end
 
   def notify_order
@@ -215,7 +245,7 @@ class UnoGame
   def clean_up_end_game #virtual method for child classes
   end
 
-  def notify_player(p,text)
+  def notify_player(p, text)
     puts "[To #{p}]: #{text}"
   end
 
@@ -243,7 +273,7 @@ class UnoGame
       @players.reverse! unless @double_play
     elsif card.figure == 'skip' and pass == false
       if @double_play
-        notify "#{@players[1]} and #{@players.fetch(2,@players[0])} were skipped!"
+        notify "#{@players[1]} and #{@players.fetch(2, @players[0])} were skipped!"
         @players.rotate! 3
       else
         notify "#{@players[1]} was skipped!"
@@ -295,16 +325,16 @@ class UnoGame
         else
           next_turn
         end
-		return true
+        return true
       else
         notify "Sorry #{player}, that card doesn't play."
         card.set_wild_color :wild
-		false
+        false
       end
     else
       notify "It's not your turn."
       card.set_wild_color :wild
-	  false
+      false
     end
 
   end
@@ -320,10 +350,10 @@ class UnoGame
     @game_state = 0
     give_cards_to_player @players[1], @stacked_cards if @stacked_cards > 0
 
-    @total_score = @players.map{|p| p.hand.value }.inject(:+) #tally up points
+    @total_score = @players.map { |p| p.hand.value }.inject(:+) #tally up points
 
     #min score per game
-    @total_score = [@total_score,30].max
+    @total_score = [@total_score, 30].max
 
     db_update_after_game_ended unless @casual == 1
     player_stats = UnoRankModel[@players[0].to_s]
@@ -348,13 +378,13 @@ class UnoGame
   def db_save_card card, player, received = 0
     unless @casual == 1
       dbcard = UnoTurnModel.create(
-                            :card => card.to_s,
-                            :figure => card.normalize_figure,
-                            :color => card.normalize_color,
-                            :player => player.to_s,
-                            :received => received,
-                            :time => Time.now.strftime("%F %T"),
-                            :game => @game.ID
+          :card => card.to_s,
+          :figure => card.normalize_figure,
+          :color => card.normalize_color,
+          :player => player.to_s,
+          :received => received,
+          :time => Time.now.strftime("%F %T"),
+          :game => @game.ID
       )
       dbcard.save
     end
@@ -430,7 +460,7 @@ class UnoGame
           :subject => player
       )
       action.save
-     end
+    end
   end
 
 end
@@ -438,12 +468,17 @@ end
 class IrcUnoGame < UnoGame
   attr_accessor :irc
   attr_accessor :plugin
+
   def notify text
-    @irc.Channel('#kx').send text
+    @semaphore.synchronize {
+      @irc.Channel('#kx').send text
+    }
   end
 
-  def notify_player p,text
-    @irc.User(p.nick).notice text
+  def notify_player p, text
+    @semaphore.synchronize {
+      @irc.User(p.nick).notice text
+    }
   end
 
   def clean_up_end_game

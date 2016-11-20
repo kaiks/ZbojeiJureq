@@ -135,7 +135,7 @@ class AzGame
 
 
   def attempt(word, nick)
-    if is_within_bounds(word)
+    if is_within_bounds(word) && @won == false
       player = find_player(nick)
 
       player.tries += 1
@@ -288,7 +288,7 @@ class AzPlugin
   end
 
   def hint(m)
-    @games[m.channel].hint
+    @games[m.channel].hint unless @games[m.channel].nil?
   end
 
   def stop(m)
@@ -320,7 +320,7 @@ class AzPlugin
   def guess(m, word)
     unless @games[m.channel].nil?
       @games[m.channel].try(word, m.user.to_s)
-      #@games[m.channel] = nil
+      @games[m.channel] = nil if @games[m.channel].won?
     end
   end
 

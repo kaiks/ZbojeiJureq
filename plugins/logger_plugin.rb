@@ -100,7 +100,7 @@ class LoggerPlugin
       if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s
       elsif ls[0] =~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9]$/
-        timestamp = ls[0]
+        timestamp = ls[0] + ' '
       else
         if (line.include?(pattern)) && (!ls[0].nil?)
           #if (nick.nil?) or (ls[0].include?(nick))

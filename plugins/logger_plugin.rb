@@ -93,7 +93,7 @@ class LoggerPlugin
 
     @logfile.rewind
     @logfile.each_line do |line|
-      ls = line.string.
+      ls = line.
           encode("UTF-8", :invalid => :replace, :undef => :replace, :replace => "").
           force_encoding('UTF-8').
           split

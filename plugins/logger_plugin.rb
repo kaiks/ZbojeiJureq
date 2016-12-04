@@ -1,7 +1,6 @@
-#todo: cache
+#encoding: UTF-8
 #todo: random quote
 #todo: search by nick
-#todo: make it actually work lul
 
 require 'cinch'
 require 'pasteit'
@@ -30,8 +29,9 @@ class LoggerPlugin
     @short_format       = "%Y-%m-%d"
     @msg_format         = "%H:%M:%S"
     @filename           = "#kx.log"
+        split
     @logfile            = File.open(@filename,"a+")
-    @logfile_ram_cache  = File.read(@filename).split('\n')
+    @logfile_ram_cache  = File.readlines(@filename)
     @midnight_message   =  "#{@short_format}"
     @last_time_check    = Time.now
   end
@@ -55,7 +55,7 @@ class LoggerPlugin
       #@logfile = File.open(@filename,"w")
 	  begin
 		@logfile.puts(time.strftime(@midnight_message))
-    @logfile_ram_cache = File.read(@filename).split('\n')
+    @logfile_ram_cache = File.readlines(@filename)
     @logfile.close
       rescue
 		puts 'Something went wrong with writing to log file'
@@ -96,10 +96,7 @@ class LoggerPlugin
     #@logfile.rewind
     #@logfile.each_line do |line|
     @logfile_ram_cache.each do |line|
-      ls = line.
-          encode("UTF-8", :invalid => :replace, :undef => :replace, :replace => "").
-          force_encoding('UTF-8').
-          split
+      ls = line.split
       if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s
       elsif ls[0] =~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9]$/

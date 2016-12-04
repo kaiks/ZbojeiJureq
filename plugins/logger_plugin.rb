@@ -27,12 +27,13 @@ class LoggerPlugin
 
   def initialize(*args)
     super
-    @short_format = "%Y-%m-%d"
-    @msg_format = "%H:%M:%S"
-    @filename = "#kx.log"
-    @logfile          = File.open(@filename,"a+")
-    @midnight_message =  "#{@short_format}"
-    @last_time_check  = Time.now
+    @short_format       = "%Y-%m-%d"
+    @msg_format         = "%H:%M:%S"
+    @filename           = "#kx.log"
+    @logfile            = File.open(@filename,"a+")
+    @logfile_ram_cache  = File.read(@filename).split('\n')
+    @midnight_message   =  "#{@short_format}"
+    @last_time_check    = Time.now
   end
 
   def setup(*)
@@ -54,7 +55,8 @@ class LoggerPlugin
       #@logfile = File.open(@filename,"w")
 	  begin
 		@logfile.puts(time.strftime(@midnight_message))
-		@logfile.close
+    @logfile_ram_cache = File.read(@filename).split('\n')
+    @logfile.close
       rescue
 		puts 'Something went wrong with writing to log file'
 	  end
@@ -91,8 +93,9 @@ class LoggerPlugin
     puts pattern
 
 
-    @logfile.rewind
-    @logfile.each_line do |line|
+    #@logfile.rewind
+    #@logfile.each_line do |line|
+    @logfile_ram_cache.each do |line|
       ls = line.
           encode("UTF-8", :invalid => :replace, :undef => :replace, :replace => "").
           force_encoding('UTF-8').
@@ -109,7 +112,6 @@ class LoggerPlugin
         end
       end
     end
-    #puts "--->" + results.to_s
     m.reply results[0]
     m.reply 'moar: ' + Pasteit::PasteTool.new(results.join).upload! unless results.length < 2
   end

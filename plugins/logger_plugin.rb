@@ -93,8 +93,10 @@ class LoggerPlugin
 
     @logfile.rewind
     @logfile.each_line do |line|
-      #puts "doing the file #{line}"
-      ls = line.split
+      ls = line.string.
+          encode("UTF-8", :invalid => :replace, :undef => :replace, :replace => "").
+          force_encoding('UTF-8').
+          split
       if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s
       elsif ls[0] =~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9]$/

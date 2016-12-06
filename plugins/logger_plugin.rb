@@ -55,7 +55,6 @@ class LoggerPlugin
       #@logfile = File.open(@filename,"w")
 	  begin
 		@logfile.puts(time.strftime(@midnight_message))
-    @logfile_ram_cache = File.readlines(@filename)
     @logfile.close
       rescue
 		puts 'Something went wrong with writing to log file'
@@ -93,9 +92,8 @@ class LoggerPlugin
     puts pattern
 
 
-    #@logfile.rewind
-    #@logfile.each_line do |line|
-    @logfile_ram_cache.each do |line|
+
+    File.readlines(@filename).each_line do |line|
       ls = line.split
       if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s

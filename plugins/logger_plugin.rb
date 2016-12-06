@@ -51,15 +51,13 @@ class LoggerPlugin
   def check_midnight
     time = Time.now
     if time.day != @last_time_check.day
-      #@filename = "log-#{Time.now.strftime(@short_format)}.log"
-      #@logfile = File.open(@filename,"w")
-	  begin
-		@logfile.puts(time.strftime(@midnight_message))
-    @logfile.close
-      rescue
-		puts 'Something went wrong with writing to log file'
-	  end
-      @logfile = File.open(@filename,"a+")
+      begin
+      @logfile.puts(time.strftime(@midnight_message))
+      @logfile.close
+        rescue
+      puts 'Something went wrong with writing to log file'
+      end
+        @logfile = File.open(@filename,"a+")
     end
     @last_time_check = time
   end

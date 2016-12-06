@@ -29,7 +29,6 @@ class LoggerPlugin
     @short_format       = "%Y-%m-%d"
     @msg_format         = "%H:%M:%S"
     @filename           = "#kx.log"
-        split
     @logfile            = File.open(@filename,"a+")
     @logfile_ram_cache  = File.readlines(@filename)
     @midnight_message   =  "#{@short_format}"

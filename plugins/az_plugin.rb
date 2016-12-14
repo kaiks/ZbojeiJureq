@@ -202,7 +202,7 @@ class AzGame
   def score
     n = @total_guesses
     p = @players.length
-    t = (100*exp(-(n-1)**2/50**2)).ceil + p
+    t = (100*exp(-(n-1)**2/50.0**2)).ceil + p
     t /= 2 if @easy
     return t
   end

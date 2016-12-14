@@ -304,6 +304,10 @@ class UnoGame
         player.hand.destroy(card)
 
         if play_second == true
+          if @already_picked == true
+            notify "Sorry, you can't play the picked card twice."
+            return false
+          end
           debug 'we are actually trying to double play'
           #throw 'Hey, these cards are not the same!' unless card.to_s == second.to_s
           card = @players[0].hand.find_card card.to_s

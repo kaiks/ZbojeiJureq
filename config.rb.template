@@ -20,7 +20,7 @@ CONFIG = {
     'ftp_password'          => '',
     'ftp_host'              => 'ftp.server.com',
     'ftp_path'              => '',
-    'ftp_result_url'        => 'http://server.com/'
+    'ftp_result_url'        => 'http://server.com/',
 
     'dropbox_upload'        => false,
     'dropbox_path'          => 'z:\\Dropbox',

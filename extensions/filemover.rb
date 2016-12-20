@@ -9,6 +9,7 @@ module Cinch
   FTP_PASSWORD = CONFIG['ftp_password']
   FTP_PATH = CONFIG['ftp_path']
   FTP_HOST = CONFIG['ftp_host']
+  FTP_RESULT_URL = CONFIG['ftp_result_url']
   DROPBOX_PATH = CONFIG['dropbox_path']
 
 
@@ -29,7 +30,7 @@ module Cinch
       ftp.putbinaryfile(sourcefile, filename)
       ftp.close
 
-      FTP_PATH + path + '/' + filename
+      FTP_RESULT_URL + path + '/' + filename
 
     rescue Exception => err
       puts err.message

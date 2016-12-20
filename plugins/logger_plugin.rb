@@ -30,7 +30,7 @@ class LoggerPlugin
     @msg_format         = "%H:%M:%S"
     @filename           = "#kx.log"
     @logfile            = File.open(@filename,"a+")
-    @logfile_ram_cache  = File.readlines(@filename)
+    @logfile_ram_cache  = File.open(@filename, 'r')
     @midnight_message   =  "#{@short_format}"
     @last_time_check    = Time.now
   end
@@ -89,8 +89,8 @@ class LoggerPlugin
     puts pattern
 
 
-
-    File.readlines(@filename).each_line do |line|
+    @logfile_ram_cache.rewind
+    @logfile_ram_cache.each_line do |line|
       ls = line.split
       if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s

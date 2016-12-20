@@ -4,6 +4,7 @@
 
 require 'cinch'
 require 'pasteit'
+require 'digest/sha1'
 
 #based on Logging Plugin:
 # == Logging Plugin Authors
@@ -126,10 +127,19 @@ class LoggerPlugin
       m.reply 'moar: ' + Pasteit::PasteTool.new(results.join).upload! unless results.length < 2
     rescue
       puts 'pasteit didnt work, initializing fallback'
-      filename = rand(36**8).to_s(36)+'.txt'
-      tmp_file = File.write('tmp_files/' + filename, results.join)
-      result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
-      m.reply "moar: #{result}"
+      results = results.join
+
+      result_digest = Digest::SHA1.hexdigest(results.join)
+      #filename = rand(36**8).to_s(36)+'.txt'
+      filename = result_digest[0..4] + result_digest[-5..-1] + '.txt'
+      filepath = 'tmp_files/' + filename
+      if File.exist?(filepath)
+        m.reply "moar: #{CONFIG['ftp_result_url'] + 'logs/' + filename}"
+      else
+        File.write('tmp_files/' + filename, results.join)
+        result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
+        m.reply "moar: #{result}"
+      end
     end
   end
 

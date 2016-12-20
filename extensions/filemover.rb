@@ -20,7 +20,7 @@ module Cinch
       FileUtils.cp file, DROPBOX_PATH + path + filename
     end
 
-    def send_to_ftp(sourcefile, path ='', filename = sourcefile.split('/')[-1])
+    def send_to_ftp(sourcefile, path = '', filename = sourcefile.split('/')[-1])
       return unless CONFIG['ftp_upload']
       ftp = Net::FTP.new(FTP_HOST)
       ftp.passive = true
@@ -29,7 +29,7 @@ module Cinch
       ftp.putbinaryfile(sourcefile, filename)
       ftp.close
 
-      true
+      FTP_PATH + path + '/' + filename
 
     rescue Exception => err
       puts err.message

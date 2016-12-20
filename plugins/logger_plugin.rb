@@ -122,7 +122,15 @@ class LoggerPlugin
     end
     release_lock
     m.reply results[0]
-    m.reply 'moar: ' + Pasteit::PasteTool.new(results.join).upload! unless results.length < 2
+    begin
+      m.reply 'moar: ' + Pasteit::PasteTool.new(results.join).upload! unless results.length < 2
+    rescue
+      puts 'pasteit didnt work, initializing fallback'
+      filename = rand(36**8).to_s(36)+'.txt'
+      tmp_file = File.write('tmp_files/' + filename, results.join)
+      result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
+      m.reply "moar: #{result}"
+    end
   end
 
 end

@@ -30,7 +30,7 @@ class LoggerPlugin
     @msg_format         = "%H:%M:%S"
     @filename           = "#kx.log"
     @logfile            = File.open(@filename,"a+")
-    @logfile_ram_cache  = File.open(@filename, 'r')
+    #@logfile_ram_cache  = File.open(@filename, 'r')
     @midnight_message   =  "#{@short_format}"
     @last_time_check    = Time.now
   end
@@ -50,13 +50,16 @@ class LoggerPlugin
   def check_midnight
     time = Time.now
     if time.day != @last_time_check.day
+      get_lock
       begin
-      @logfile.puts(time.strftime(@midnight_message))
-      @logfile.close
-        rescue
-      puts 'Something went wrong with writing to log file'
+        @logfile.puts(time.strftime(@midnight_message))
+        @logfile.close
+      rescue
+        puts 'Something went wrong with writing to log file'
+        release_lock
       end
-        @logfile = File.open(@filename,"a+")
+      @logfile = File.open(@filename,"a+")
+      release_lock
     end
     @last_time_check = time
   end
@@ -66,6 +69,7 @@ class LoggerPlugin
   ###
   def log_public_message(msg)
     time = Time.now.strftime(@msg_format)
+    get_lock
     begin
       @logfile.puts(sprintf( "[%{time}] <%{nick}> %{msg}",
                            :time => time,
@@ -74,12 +78,24 @@ class LoggerPlugin
     rescue
       File.close(@logfile)
       @logfile = nil
-      @logfile = File.open(@logfile,"a+")
+      @logfile = File.open(@filename,"a+")
       @logfile.puts(sprintf( "[%{time}] <%{nick}> %{msg}",
                              :time => time,
                              :nick => msg.user.name,
                              :msg  => msg.message))
     end
+    release_lock
+  end
+
+  def get_lock
+    while @logfile_lock == true
+      sleep(0.5)
+    end
+    @logfile_lock = true
+  end
+
+  def release_lock
+    @logfile_lock = false
   end
 
   def find_old(m)
@@ -88,9 +104,9 @@ class LoggerPlugin
     timestamp = ''
     puts pattern
 
-
-    @logfile_ram_cache.rewind
-    @logfile_ram_cache.each_line do |line|
+    get_lock
+    @logfile.rewind
+    @logfile.each_line do |line|
       ls = line.split
       if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s
@@ -104,6 +120,7 @@ class LoggerPlugin
         end
       end
     end
+    release_lock
     m.reply results[0]
     m.reply 'moar: ' + Pasteit::PasteTool.new(results.join).upload! unless results.length < 2
   end

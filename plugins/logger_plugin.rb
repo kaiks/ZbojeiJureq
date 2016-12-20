@@ -136,6 +136,8 @@ class LoggerPlugin
       if File.exist?(filepath)
         m.reply "moar: #{CONFIG['ftp_result_url'] + 'logs/' + filename}"
       else
+        puts 'pasteit didnt work, initializing fallback'
+        filename = rand(36**8).to_s(36)+'.txt'
         File.write('tmp_files/' + filename, results.join)
         result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
         m.reply "moar: #{result}"

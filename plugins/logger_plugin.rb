@@ -131,7 +131,6 @@ class LoggerPlugin
       tmp_file = File.write('tmp_files/' + filename, results.join)
       result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
       m.reply "moar: #{result}"
-      end
     end
   end
 

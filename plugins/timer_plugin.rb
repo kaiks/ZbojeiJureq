@@ -99,7 +99,7 @@ class TimerPlugin
                          :status => 0
     )
 
-    m.user.send('Got it.',true)
+    m.user.msg("Got it. Message will be sent #{Time.now+amount}",true)
 
   end
 

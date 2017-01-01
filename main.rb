@@ -38,6 +38,7 @@ require './plugins/logger_plugin.rb'
 require './plugins/protect_plugin.rb'
 require './plugins/oblicz_plugin.rb'
 require './plugins/btc_plugin.rb'
+require './plugins/currency_plugin.rb'
 
 require './plugins/plugin_management.rb'
 require './plugins/core_plugin.rb'
@@ -116,7 +117,7 @@ $bot = Cinch::Bot.new do
     c.plugins.plugins = [MultiCommands, TimerPlugin, AuthenticationPlugin, NotePlugin, AzPlugin,
                          TemplatePlugin, OwnPlugin, WeatherPlugin, TalkPlugin, UnoPlugin,
                          ObsoletePlugin, LoggerPlugin, ProtectPlugin, ObliczPlugin,
-                         BtcPlugin,
+                         BtcPlugin, CurrencyPlugin,
                          CorePlugin,
                          Cinch::Plugins::PluginManagement, Cinch::Plugins::Identify]
   end

@@ -12,7 +12,9 @@ class CurrencyPlugin
   match /e ([0-9]+\.?[0-9]*) ([A-Za-z]{3}) to ([A-Za-z]{3})/,
         method: :exchange, group: :exchange_group
   match /e$/, method: :help, group: :exchange_group
+  match /e update/, method: :update_bank, group: :exchange_group
   match /e /, method: :help, group: :exchange_group
+  timer 300,              :method => :updater
 
 
 
@@ -20,8 +22,17 @@ class CurrencyPlugin
   def initialize(*args)
     super
     I18n.config.available_locales = :en
-    Money.default_bank = Money::Bank::GoogleCurrency.new
+    update_bank
   end
+
+  def updater
+    update_bank if @last_update + 3600*4 < Time.now
+  end
+
+    def update_bank
+      Money.default_bank = Money::Bank::GoogleCurrency.new
+      @last_update = Time.now
+    end
 
   def exchange(m, from_amount, from_currency, to_currency)
     from_amount_cents = from_amount.to_f*100

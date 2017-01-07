@@ -115,7 +115,7 @@ class LoggerPlugin
         timestamp = ls[0] + ' '
       else
         if (line.include?(pattern)) && (!ls[0].nil?)
-          results += [timestamp + line] unless ls[0].include?('ZbojeiJureq') || ls[0].include?('> .log old')
+          results += [timestamp + line] unless ls[0].include?('ZbojeiJureq') || line.include?('> .log old')
         end
       end
     end

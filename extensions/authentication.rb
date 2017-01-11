@@ -1,5 +1,3 @@
-#todo: naprawic blad zajmowania usera (???)
-
 module Cinch
 
   class User

@@ -1,47 +1,14 @@
 # encoding: utf-8
 
-=begin
-gem install cinch
-gem install jdbc-sqlite3
-gem install sequel
-gem install wunderground
-gem install pasteit
-gem install cinch-identify
-gem install dentaku
-=end
-
-#todo upload uno, az
-
-
-require 'sequel'
-require 'cinch'
+require 'rubygems'
+require 'bundler/setup'
+Bundler.require
 require 'cinch/plugins/identify'
 
 Dir.chdir(File.dirname(__FILE__))
 
-require './extensions/database.rb'
-require './extensions/authentication.rb'
-require './extensions/filemover.rb'
-
-
-require './plugins/authentication_plugin.rb'
-require './plugins/timer_plugin.rb'
-require './plugins/note_plugin.rb'
-require './plugins/az_plugin.rb'
-require './plugins/own_plugin.rb'
-require './plugins/template_plugin.rb'
-require './plugins/weather_plugin.rb'
-require './plugins/talk_plugin.rb'
-require './plugins/uno_plugin.rb'
-require './plugins/obsolete_plugin.rb'
-require './plugins/logger_plugin.rb'
-require './plugins/protect_plugin.rb'
-require './plugins/oblicz_plugin.rb'
-require './plugins/btc_plugin.rb'
-require './plugins/currency_plugin.rb'
-
-require './plugins/plugin_management.rb'
-require './plugins/core_plugin.rb'
+Dir["./extensions/*.rb"].each {|file| require file }
+Dir["./plugins/*.rb"].each {|file| require file }
 
 require './config.rb'
 

@@ -416,7 +416,7 @@ class UnoGame
 
 
       players_game_no = UNODB[:uno].where(:nick => @players[0].to_s).first[:games]
-      @game.game = players_game_no + 1
+      @game.game = players_game_no
       @game.save
     end
   end

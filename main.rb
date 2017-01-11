@@ -13,26 +13,15 @@ Dir["./plugins/*.rb"].each {|file| require file }
 require './config.rb'
 
 
-class MultiCommands
+class EvaluatePlugin
   include Cinch::Plugin
   self.prefix = '.'
-  match /command1 (.+)/, method: :command1
-  match /eval (.+)/, method: :command2
-  match /^command3 (.+)/, use_prefix: false
+  match /eval (.+)/, method: :evaluate
 
-  def command1(m, arg)
-    m.reply "is #{m.user.nick} authed? #{m.user.authorized?}"
-    m.reply "command1, arg: #{arg}"
-  end
-
-  def command2(m, arg)
+  def evaluate(m, arg)
     if m.user.level == 100
       m.reply eval(arg)
     end
-  end
-
-  def execute(m, arg)
-    m.reply "command3, arg: #{arg}"
   end
 end
 
@@ -81,7 +70,7 @@ $bot = Cinch::Bot.new do
     }
 
 
-    c.plugins.plugins = [MultiCommands, TimerPlugin, AuthenticationPlugin, NotePlugin, AzPlugin,
+    c.plugins.plugins = [EvaluatePlugin, TimerPlugin, AuthenticationPlugin, NotePlugin, AzPlugin,
                          TemplatePlugin, OwnPlugin, WeatherPlugin, TalkPlugin, UnoPlugin,
                          ObsoletePlugin, LoggerPlugin, ProtectPlugin, ObliczPlugin,
                          BtcPlugin, CurrencyPlugin,

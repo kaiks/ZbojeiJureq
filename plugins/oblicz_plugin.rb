@@ -8,7 +8,7 @@ class ObliczPlugin
   self.prefix = ''
 
 
-  match /^.oblicz set ([A-z]+) ([0-9]+)/, method: :set, group: :oblicz
+  match /^.oblicz set ([A-z]+) (([1-9]*)|(([1-9]*)\.([0-9]*)))\s*$/, method: :set, group: :oblicz
   match /^\.oblicz (.*)/, method: :oblicz, group: :oblicz
   match /^oblicz (.*)/, method: :oblicz, group: :oblicz
   match /oblicz/,         method: :help, group: :oblicz
@@ -45,9 +45,8 @@ class ObliczPlugin
   end
 
   def set(m, variable, value)
-    puts "eval -> @calculator.store(#{variable}: #{value})"
     eval("@calculator.store(#{variable}: #{value})")
-    m.reply 'Ok.'
+    m.reply "Ok. #{variable} = #{value}"
   end
 
 

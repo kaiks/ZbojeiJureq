@@ -17,7 +17,7 @@ $bot = Cinch::Bot.new do
     c.nick                = CONFIG['nick']
     c.server              = CONFIG['server']
     c.messages_per_second = CONFIG['messages_per_second']
-    c.channels            = ["#kx"]
+    c.channels            = CONFIG['channels']
     c.verbose             = CONFIG['verbose']
     c.shared[:database]   = DB #Sequel.connect('jdbc:sqlite:ZbojeiJureq.db')
 

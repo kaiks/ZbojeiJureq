@@ -39,6 +39,7 @@ class ObliczPlugin
 
 
   def oblicz(m, tekst)
+    tekst = tekst.gsub(',', '.') unless tekst =~ /[A-Za-z]/
     result = (@calculator.evaluate tekst).to_s
     m.reply eval result.gsub(/E([0-9]+)/,'*10**\1')
   end

@@ -8,7 +8,7 @@ require 'cinch/plugins/identify'
 Dir.chdir(File.dirname(__FILE__))
 
 Dir["./extensions/*.rb"].each {|file| require file }
-Dir["./plugins/*.rb"].each {|file| require file }
+Dir["./plugins/*.rb"].each {|file| require file } unless CONFIG['disable_autoload']
 
 require './config.rb'
 

@@ -10,6 +10,7 @@ CONFIG = {
     'verbose'               => true,
     'message_per_second'    => 1,
 
+    'disable_autoload'      => false,
 
     'talkdb_upload_delay'   => 3600,
     'maindb_upload_delay'   => 3600,

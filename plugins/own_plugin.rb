@@ -14,7 +14,7 @@ class OwnRecord < Sequel::Model(:own)
   end
 
   def time
-    last_owned_time ||= nil
+    last_owned_time ||= (Date.today - 1337).to_s
     Time.parse(last_owned_time)
   end
 

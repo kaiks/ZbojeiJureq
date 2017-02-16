@@ -278,7 +278,7 @@ class AzPlugin
   match /az ez/,   group: :az, method: :start_ez
   match /az top(\s?[0-5])?/, group: :az, method: :top
   match /az$/, group: :az, method: :start
-  match /([A-z]{1,45})/, use_prefix: false, group: :az, method: :guess
+  match /^([A-z]{1,45})$/, use_prefix: false, group: :az, method: :guess
 
   def initialize(*args)
     super

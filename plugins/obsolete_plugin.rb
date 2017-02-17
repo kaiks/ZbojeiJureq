@@ -4,12 +4,12 @@ class ObsoletePlugin
   self.prefix = '!'
 
 
-  match /(w)$/,         method: :message
-  match /(noter).*$/,         method: :message
-  match /(note).*/,         method: :message
-  match /(uno).*/,         method: :message
-  match /(btc)/,         method: :message
-  match /^(timer).*/,         method: :message, use_prefix: false
+  match /(w)$/,           method: :message
+  match /(noter).*$/,     method: :message, group: :note
+  match /(note).*/,       method: :message, group: :note
+  match /(uno).*/,        method: :message
+  match /(btc)/,          method: :message
+  match /^(timer).*/,     method: :message, use_prefix: false
 
 
 

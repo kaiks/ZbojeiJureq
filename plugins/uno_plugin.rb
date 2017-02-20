@@ -37,6 +37,7 @@ class UnoPlugin
 
   match /^pa$/,         group: :uno, method: :pass, use_prefix: false
   match /^pe$/,         group: :uno, method: :pick, use_prefix: false
+  match /^st$/,         group: :uno, method: :get_stack_size, use_prefix: false
   match /^pl ([A-z0-9+]{1,6})$/,   group: :uno, method: :play, use_prefix: false
 
 
@@ -92,6 +93,10 @@ class UnoPlugin
     if @game.players.map{|nick| nick.nick }.member? m.user.nick
       @game.notify_top_card
     end
+  end
+
+  def get_stack_size(m)
+    m.reply "#{@game.card_stack.length} cards left in the stack" if @game.game_state > 0
   end
 
 

@@ -143,8 +143,8 @@ class UnoGame
     p.hand.sort! { |a, b| a.to_s <=> b.to_s }
   end
 
-  def check_for_empty_stack
-    if @card_stack.empty?
+  def check_for_empty_stack(n = 0)
+    if @card_stack.length <= n
       notify 'Reshuffling discard pile.'
       @played_cards.each { |c| c.unset_wild_color }
       @card_stack << @played_cards
@@ -154,7 +154,7 @@ class UnoGame
   end
 
   def give_cards_to_player p, n
-    check_for_empty_stack
+    check_for_empty_stack(n)
     @already_picked = true
     picked = @card_stack.pick(n)
     picked.each { |card|

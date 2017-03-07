@@ -125,8 +125,12 @@ class UnoPlugin
   def join(m)
     puts "Current players: " + @game.players.to_s
     if @game.players.find{|p| m.user.nick==p.nick}.nil?
-      new_player = UnoPlayer.new(m.user.nick)
-      @game.add_player new_player
+      if UnoGame.can_join?(m.user.nick) || m.user.nick == 'unobot'
+        new_player = UnoPlayer.new(m.user.nick)
+        @game.add_player new_player
+      else
+        m.reply "Sorry, you can't join this game. You don't have enough points!"
+      end
     else
       m.reply "You are already in the game, #{m.user.nick}."
     end
@@ -190,11 +194,15 @@ class UnoPlugin
   def start(m)
     @semaphore.synchronize {
       if @game.nil?
-        @game = (IrcUnoGame.new m.user.nick)
-        @game.irc ||= $bot
-        @game.plugin ||= self
-        m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
-        join(m)
+        if UnoGame.can_join? m.user.nick
+          @game = (IrcUnoGame.new m.user.nick)
+          @game.irc ||= $bot
+          @game.plugin ||= self
+          m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
+          join(m)
+        else
+          m.reply "Sorry, you can't create games anymore. Try playing casual by typing .uno casual"
+        end
       else
         m.reply "An uno game is already being played."
       end

@@ -356,14 +356,21 @@ class UnoGame
 
     @total_score = @players.map { |p| p.hand.value }.inject(:+) #tally up points
 
-    #min score per game
-    @total_score = [@total_score, 30].max
 
     db_update_after_game_ended unless @casual == 1
     player_stats = UnoRankModel[@players[0].to_s]
 
-    notify "#{@players[0]} gains #{@total_score} points. For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
+    notify "#{@players[0]} gains #{@total_score} points, now having #{player_stats.total_score}pts and #{player_stats.games} games played. Other players have lost points."
     clean_up_end_game
+  end
+
+  def self.can_join?(nick)
+    player = UnoRankModel[@players[0].to_s]
+    if player
+      player.total_score > 0
+    else
+      true
+    end
   end
 
   def end_game(nick) #todo
@@ -427,7 +434,7 @@ class UnoGame
         player_record = UnoRankModel[p.to_s]
 
         if player_record.nil?
-          player_record = UnoRankModel.create(:nick => p.to_s)
+          player_record = UnoRankModel.create(nick: p.to_s, :total_score => 5000)
         end
 
         player_record.games += 1
@@ -435,6 +442,8 @@ class UnoGame
           @game.total_score = player_record.total_score
           player_record.wins += 1
           player_record.total_score += @total_score
+        else
+          player_record.total_score -= player.hand.value
         end
 
         player_record.save

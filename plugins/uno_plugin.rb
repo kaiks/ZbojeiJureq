@@ -240,7 +240,7 @@ class UnoPlugin
     m.reply '   ' + "nick".ljust(20) + 'points  games  average  wins  winrate - full list: http://uno.kaiks.eu '
     #SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) sr FROM uno WHERE nick LIKE ' $+ %safe_nick $+ ' AND games >= 2 ORDER BY %by %ord LIMIT %count
     #UNODB[:uno].where('games > 2').select_append('ROUND(CAST(total_score as FLOAT)/CAST(games AS FLOAT,2)').order(Sequel.desc(5)).limit(n).each { |row|
-    UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE games >= 10 ORDER BY 5 DESC LIMIT ?', n].each { |row|
+    UNODB['SELECT *, ROUND(CAST((total_score - 5000) AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE games >= 3 ORDER BY 5 DESC LIMIT ?', n].each { |row|
       counter += 1
       values = row.values
       if values[0].to_s.length > 0
@@ -260,12 +260,12 @@ class UnoPlugin
 
   #todo: fix formatting
   def score(m, user)
-    r = UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE nick = ?',user].first
+    r = UNODB['SELECT *, ROUND(CAST((total_score - 5000) AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE nick = ?',user].first
     games = r[:games]
     wins = r[:wins]
     winrate = games == 0 ? 0.0 : (100.to_f*(wins.to_f / games.to_f)).round(2)
-    avg = r[:'ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2)']
-    m.reply "#{r[:nick]}: #{avg} avg #{r[:total_score]} pts #{games} games #{wins} wins #{winrate}% winrate"
+    avg = r[:'ROUND(CAST((total_score - 5000) AS FLOAT)/CAST(games AS FLOAT),2)']
+    m.reply "#{r[:nick]}: #{avg} avg #{r[:total_score]-5000} pts #{games} games #{wins} wins #{winrate}% winrate"
   end
 
   def own_score(m)

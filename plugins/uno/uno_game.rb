@@ -365,7 +365,7 @@ class UnoGame
   end
 
   def self.can_join?(nick)
-    player = UnoRankModel[@players[0].to_s]
+    player = UnoRankModel[nick]
     if player
       player.total_score > 0
     else
@@ -443,7 +443,7 @@ class UnoGame
           player_record.wins += 1
           player_record.total_score += @total_score
         else
-          player_record.total_score -= player.hand.value
+          player_record.total_score -= p.hand.value
         end
 
         player_record.save

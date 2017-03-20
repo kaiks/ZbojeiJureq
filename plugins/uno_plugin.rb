@@ -215,7 +215,7 @@ class UnoPlugin
         @game = IrcUnoGame.new(m.user.nick, 1)
         @game.irc ||= $bot
         @game.plugin ||= self
-        m.reply "Uno game started"
+        m.reply "Ok, created casual 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
         join(m)
       else
         m.reply "An uno game is already being played."

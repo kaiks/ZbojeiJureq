@@ -204,8 +204,9 @@ class UnoPlugin
   def start_casual(m)
     @semaphore.synchronize {
       if @game.nil?
-        @game = IrcUnoGame.new m.user.nick, 1
-        @game.irc ||= bott
+        @game = IrcUnoGame.new(m.user.nick, 1)
+        @game.irc ||= $bot
+        @game.plugin ||= self
         m.reply "Uno game started"
         join(m)
       else

@@ -175,7 +175,7 @@ class UnoPlugin
         elsif card_text =~/wd4[rgby]/
           card = @game.players[0].hand.reverse.find_card('wd4')
           card.set_wild_color Uno::expand_color card_text[3] unless card.nil?
-        else
+        elsif card_text =~ /^[^w]+$/i
           card = @game.players[0].hand.reverse.find_card(card_text)
         end
         puts "Proposed card text: " + proposed_card_text

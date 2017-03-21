@@ -357,10 +357,15 @@ class UnoGame
     @total_score = @players.map { |p| p.hand.value }.inject(:+) #tally up points
 
 
-    db_update_after_game_ended unless @casual == 1
-    player_stats = UnoRankModel[@players[0].to_s]
 
-    notify "#{@players[0]} gains #{@total_score} points, now having #{player_stats.total_score}pts and #{player_stats.games} games played. Other players have lost points."
+    winning string = "#{@players[0]} gains #{@total_score} points."
+    if @game.casual != 1
+      db_update_after_game_ended
+      player_stats = UnoRankModel[@players[0].to_s]
+      winning_string += " For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
+      winnings_string += " Other players have lost points."
+    end
+    notify winning_string
     clean_up_end_game
   end
 
@@ -495,8 +500,10 @@ class IrcUnoGame < UnoGame
   end
 
   def clean_up_end_game
-    @plugin.upload_db
-    @plugin.end_game
+    unless @casual
+      @plugin.upload_db
+      @plugin.end_game
+    end
   end
 
 end

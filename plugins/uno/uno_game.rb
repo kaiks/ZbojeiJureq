@@ -363,7 +363,7 @@ class UnoGame
     if @game.casual != 1
       db_update_after_game_ended
       player_stats = UnoRankModel[@players[0].to_s]
-      winning_string += For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
+      winning_string += "For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
     end
     notify winning_string
     clean_up_end_game

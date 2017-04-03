@@ -358,7 +358,7 @@ class UnoGame
 
 
 
-    winning string = "#{@players[0]} gains #{@total_score} points."
+    winning_string = "#{@players[0]} gains #{@total_score} points."
     if @game.casual != 1
       db_update_after_game_ended
       player_stats = UnoRankModel[@players[0].to_s]

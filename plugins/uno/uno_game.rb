@@ -500,7 +500,7 @@ class IrcUnoGame < UnoGame
   end
 
   def clean_up_end_game
-    unless @casual
+    unless @casual == 1
       @plugin.upload_db
       @plugin.end_game
     end

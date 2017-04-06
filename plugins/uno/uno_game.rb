@@ -358,14 +358,14 @@ class UnoGame
 
 
 
-    winning_string = "#{@players[0]} gains #{@total_score} points."
+    winstring = "#{@players[0]} gains #{@total_score} points."
     if @game.casual != 1
       db_update_after_game_ended
       player_stats = UnoRankModel[@players[0].to_s]
-      winning_string += " For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
-      winning_string += " Other players have lost points."
+      winstring += " For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
+      winstring += " Other players have lost points."
     end
-    notify winning_string
+    notify winstring
     clean_up_end_game
   end
 

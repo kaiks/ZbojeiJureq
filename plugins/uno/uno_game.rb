@@ -380,7 +380,7 @@ class UnoGame
 
   def end_game(nick) #todo
     @game.end = Time.now.strftime("%F %T")
-    @game.save
+    @game.save if @casual != 1
   end
 
   def check_for_number_of_cards_left player
@@ -500,10 +500,10 @@ class IrcUnoGame < UnoGame
   end
 
   def clean_up_end_game
-    unless @casual == 1
+    if @casual != 1
       @plugin.upload_db
-      @plugin.end_game
     end
+    @plugin.end_game
   end
 
 end

@@ -252,7 +252,6 @@ class UnoPlugin
 
   def end_game
     @game = nil
-    @bot.send_to_ftp './uno.db', '', 'unodb'
   end
 
   def help(m)
@@ -287,7 +286,7 @@ class UnoPlugin
   end
 
   def upload_db
-    #todo: ftp
+    @bot.send_to_ftp './uno.db', '', 'unodb'
     @bot.upload_to_dropbox './uno.db'
   end
 

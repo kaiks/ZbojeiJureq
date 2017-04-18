@@ -13,6 +13,7 @@ GEM
       multi_xml (>= 0.5.2)
     i18n (0.7.0)
     jdbc-sqlite3 (3.8.11.2)
+    json (2.0.2)
     json (2.0.2-java)
     money (6.7.1)
       i18n (>= 0.6.4, <= 0.7.0)
@@ -29,6 +30,7 @@ GEM
 
 PLATFORMS
   java
+  x86-mingw32
 
 DEPENDENCIES
   cinch
@@ -42,4 +44,4 @@ DEPENDENCIES
   wunderground
 
 BUNDLED WITH
-   1.13.7
+   1.14.6

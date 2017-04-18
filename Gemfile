@@ -1,5 +1,10 @@
 source 'https://rubygems.org'
-gem 'jdbc-sqlite3'
+if RUBY_PLATFORM == 'java'
+    gem 'jdbc-sqlite3'
+  else
+    gem 'sqlite3'
+end
+
 gem 'sequel'
 
 gem 'cinch'

@@ -1,4 +1,4 @@
-UNODB = Sequel.connect('jdbc:sqlite:uno.db')
+UNODB = sqlite_load('uno.db')
 
 class UnoGameModel < Sequel::Model(UNODB[:games])
   def time_start

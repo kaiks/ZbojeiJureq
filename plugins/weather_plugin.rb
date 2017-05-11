@@ -13,6 +13,7 @@ class WeatherPlugin
 
 
   match /w register (.*)/,     method: :register, group: :weathergroup
+  match /w (0000\.[0-9\.]+)/,  method: :weather_zmw, group: :weathergroup
   match /w ([^\s]+)/,          method: :weather, group: :weathergroup
   match /w/,                   method: :registered_weather, group: :weathergroup
 
@@ -33,6 +34,10 @@ class WeatherPlugin
     else
       m.reply parse_weather_simple query_results
     end
+  end
+
+  def weather_zmw(m, location_code)
+    weather(m, "zmw:#{location_code}")
   end
 
   def register m, location

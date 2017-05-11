@@ -325,7 +325,7 @@ class AzPlugin
   end
 
   def help(m)
-    m.reply 'uno help available at http://kx.shst.pl/help/az.html'
+    m.reply 'az help available at http://kx.shst.pl/help/az.html'
   end
 
   def top(m, n = 5)
@@ -334,12 +334,20 @@ class AzPlugin
     n ||= 5
     n = n.to_i
 
+    nick_total_games = @bot.db[:az_guess].group(:nick).select_group(:nick).select_append(Sequel.function(:count, :game).distinct)
+
     m.reply '   ' + "nick".ljust(12) + 'points  games average wins - full list: http://kaiks.eu/az.php'
     @bot.db[:az_game].group(:finished_by).select_group(:finished_by).select_append(Sequel.function(:sum, :points)).select_append(Sequel.function(:count, :id)).order(Sequel.desc(2)).limit(n).each { |row|
       counter += 1
       values = row.values
+      nick = values[0].to_s
+      total_score = values[1]
+      total_wins = values[2]
+      total_games = nick_total_games.where(nick: nick).first[:count]
+      average = (total_score.to_f/total_games.to_f).round(2)
+
       if values[0].to_s.length > 0
-        m.reply "#{counter}. #{values[0].to_s.ljust(12)} #{values[1].to_s.ljust(6)} #{values[2].to_s.ljust(5)} #{values[1].to_i.to_s.ljust(7)} #{(values[1].to_i/values[2]).to_s.ljust(7)}"
+        m.reply "#{counter}. #{nick.ljust(12)} #{total_score.to_s.ljust(6)} #{total_games.to_s.ljust(5)} #{average.to_s.ljust(7)} #{total_wins.to_s.ljust(7)}"
       end
     }
   end

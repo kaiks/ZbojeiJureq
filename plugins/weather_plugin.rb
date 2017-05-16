@@ -13,7 +13,7 @@ class WeatherPlugin
 
 
   match /w register (.*)/,     method: :register, group: :weathergroup
-  match /w (0000\.[0-9\.]+)/,  method: :weather_zmw, group: :weathergroup
+  match /w (00000\.[0-9\.]+)/,  method: :weather_zmw, group: :weathergroup
   match /w (.+)/,          method: :weather, group: :weathergroup
   match /w/,                   method: :registered_weather, group: :weathergroup
 

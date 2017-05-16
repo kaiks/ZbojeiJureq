@@ -10,7 +10,7 @@ class TalkPlugin
 
   def initialize(*args)
     super
-    @talkdb = Sequel.connect('jdbc:sqlite:talk.db')
+    @talkdb = sqlite_load('talk.db')
     types = @talkdb[:types].select_hash(:description, :id)
   end
 

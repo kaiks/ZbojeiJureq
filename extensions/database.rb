@@ -1,4 +1,13 @@
-DB = Sequel.connect('jdbc:sqlite:ZbojeiJureq.db')
+def sqlite_load(filename)
+  driver_prefix = if RUBY_PLATFORM == 'java'
+                    'jdbc:sqlite:'
+                  else
+                    'sqlite://'
+                  end
+  Sequel.connect(driver_prefix + filename)
+end
+
+DB = sqlite_load('ZbojeiJureq.db')
 
 module Cinch
   class Bot

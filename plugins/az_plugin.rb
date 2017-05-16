@@ -213,7 +213,7 @@ class AzGame
   end
 
   def hint
-    if @total_guesses > AzConfig::TRIES_BEFORE_HINT
+    if @total_guesses >= AzConfig::TRIES_BEFORE_HINT
       say "Last letters are #{@winning_word[-3..-1]}"
     else
       say "Sorry, you need at least #{AzConfig::TRIES_BEFORE_HINT} guesses! Got #{@total_guesses} so far."

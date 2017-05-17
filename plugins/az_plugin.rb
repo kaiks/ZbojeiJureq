@@ -343,7 +343,7 @@ class AzPlugin
       nick = values[0].to_s
       total_score = values[1]
       total_wins = values[2]
-      total_games = nick_total_games.where(nick: nick).first[:count]
+      total_games = nick_total_games.where(nick: nick).first[:"count(DISTINCT `game`)"]
       average = (total_score.to_f/total_games.to_f).round(2)
 
       if values[0].to_s.length > 0

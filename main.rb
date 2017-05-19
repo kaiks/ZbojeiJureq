@@ -1,5 +1,6 @@
 # encoding: utf-8
 
+require './config.rb'
 require 'rubygems'
 require 'bundler/setup'
 Bundler.require
@@ -10,7 +11,6 @@ Dir.chdir(File.dirname(__FILE__))
 Dir["./extensions/*.rb"].each {|file| require file }
 Dir["./plugins/*.rb"].each {|file| require file } unless CONFIG['disable_autoload']
 
-require './config.rb'
 
 $bot = Cinch::Bot.new do
   configure do |c|

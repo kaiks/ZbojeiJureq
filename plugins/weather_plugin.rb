@@ -12,9 +12,9 @@ class WeatherPlugin
   self.prefix = '.'
 
 
-  match /w register (.*)/,     method: :register, group: :weathergroup
-  match /w ([^\s]+)/,          method: :weather, group: :weathergroup
-  match /w/,                   method: :registered_weather, group: :weathergroup
+  match /w register (.*)/,      method: :register, group: :weathergroup
+  match /w (.*)/,               method: :weather, group: :weathergroup
+  match /w/,                    method: :registered_weather, group: :weathergroup
 
   match /template(\s[^\s].*)/, method: :help
 

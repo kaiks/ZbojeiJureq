@@ -1,11 +1,11 @@
 class Note < Sequel::Model(:note)
 
   def to_s
-    "#{posted[0..18]} <#{nick_from}> #{message}"
+    "#{posted.to_s[0..18]} <#{nick_from}> #{message}"
   end
 
   def to_s_for_sender
-    "#{posted[0..18]} To #{nick_to}: #{message}"
+    "#{posted.to_s[0..18]} To #{nick_to}: #{message}"
   end
 
   def <=>(note)

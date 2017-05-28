@@ -17,7 +17,7 @@ class TimerNoteTest < Sequel::Model(:timer)
   end
 
   def to_s
-    "[#{time[0..18]}] <#{nick}> #{message}"
+    "[#{time.to_s[0..18]}] <#{nick}> #{message}"
   end
 
   def <=>(note)

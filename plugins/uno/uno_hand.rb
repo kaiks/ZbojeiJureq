@@ -72,6 +72,14 @@ class Hand < Array
     return Hand.new(super.select { block } )
   end
 
+  def reverse
+    return Hand.new(super.reverse)
+  end
+
+  def reverse!
+    return super.reverse!
+  end
+
   #Uno::COLORS[color]
   def of_color(color)
 	return select { |card| card.color == color }

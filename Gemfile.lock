@@ -13,7 +13,6 @@ GEM
       multi_xml (>= 0.5.2)
     i18n (0.7.0)
     json (2.0.2)
-    jdbc-sqlite3 (3.8.11.2)
     json (2.0.2-java)
     money (6.7.1)
       i18n (>= 0.6.4, <= 0.7.0)
@@ -31,6 +30,7 @@ GEM
 
 PLATFORMS
   java
+  ruby
   x86-mingw32
 
 DEPENDENCIES
@@ -38,7 +38,6 @@ DEPENDENCIES
   cinch-identify
   dentaku
   google_currency
-  jdbc-sqlite3
   money
   pasteit
   sequel

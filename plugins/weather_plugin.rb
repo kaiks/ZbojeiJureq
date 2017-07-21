@@ -1,4 +1,5 @@
 # encoding: utf-8
+
 require 'wunderground'
 require './config.rb'
 
@@ -11,16 +12,11 @@ class WeatherPlugin
 
   self.prefix = '.'
 
-
-  match /w register (.*)/,     method: :register, group: :weathergroup
-  match /w (00000\.[0-9\.]+)/,  method: :weather_zmw, group: :weathergroup
-  match /w (.+)/,          method: :weather, group: :weathergroup
-  match /w/,                   method: :registered_weather, group: :weathergroup
-
-  match /template(\s[^\s].*)/, method: :help
-
-
-
+  match /w register (.*)/i,     method: :register, group: :weathergroup
+  match /w (00000\.[0-9\.]+)/i, method: :weather_zmw, group: :weathergroup
+  match /w help/i,              method: :help, group: :weathergroup
+  match /w (.+)/i,              method: :weather, group: :weathergroup
+  match /w/i,                   method: :registered_weather, group: :weathergroup
 
   def initialize(*args)
     @w_api = Wunderground.new(CONFIG['wunderground_api_key'])
@@ -40,12 +36,12 @@ class WeatherPlugin
     weather(m, "zmw:#{location_code}")
   end
 
-  def register m, location
-    user = WeatherUser.find(:nick => m.user.nick)
-    user ||= WeatherUser.create(:nick => m.user.nick, :weather_string => location)
+  def register(m, location)
+    user = WeatherUser.find(nick: m.user.nick)
+    user ||= WeatherUser.create(nick: m.user.nick, weather_string: location)
     user.weather_string = location
     user.save
-    m.reply "Done."
+    m.reply 'Done.'
   end
 
   def registered_weather(m)
@@ -62,25 +58,23 @@ class WeatherPlugin
     h = eval(query)
   end
 
-  def parse_weather_simple h
-    location = h["current_observation"]["display_location"]["full"].to_s
-    conditions = h["current_observation"]["weather"].to_s
-    temp = h["current_observation"]["temp_c"].to_s
-    "#{h["current_observation"]["display_location"]["full"].to_s}: #{conditions} and #{temp}°C"
+  def parse_weather_simple(h)
+    location = h['current_observation']['display_location']['full'].to_s
+    conditions = h['current_observation']['weather'].to_s
+    temp = h['current_observation']['temp_c'].to_s
+    "#{h["current_observation"]["display_location"]["full"]}: #{conditions} and #{temp}°C"
   end
 
-  def result_to_string result_hash
+  def result_to_string(result_hash)
     "#{result_hash['zmw']}: #{result_hash['city']}, #{result_hash['state']}, #{result_hash['country_name']}"
   end
 
-  def parse_weather_results h
+  def parse_weather_results(h)
     'Multiple locations. Use ".w zmw:[code]".
-'+  'Codes: ' + h['results'][0..3].map{|r| result_to_string(r) }.join('   ---   ')
+' + 'Codes: ' + h['results'][0..3].map { |r| result_to_string(r) }.join('   ---   ')
   end
 
-
-
   def help(m)
-    m.channel.send '.w [city] to get weather for a city'
+    m.channel.send '.w [city] to get weather for a city. .w register [city] to save your city'
   end
 end

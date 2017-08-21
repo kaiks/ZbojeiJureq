@@ -53,8 +53,9 @@ class BtcPlugin
   end
 
   def crypto(m, coin)
+    coin = coin.upcase
     if @coin_list.include?(coin)
-      api_response = get_coin_cryptocompare(coin.upcase)
+      api_response = get_coin_cryptocompare(coin)
       m.reply cryptocompare_parse(api_response)
     else
       m.reply "Coin unknown (#{coin})."

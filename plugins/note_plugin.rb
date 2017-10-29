@@ -31,7 +31,6 @@ class NotePlugin
 
   def initialize(*args)
     super
-    Note.db = @bot.db
   end
 
   def show_notes(m)

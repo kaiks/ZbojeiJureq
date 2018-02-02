@@ -15,13 +15,11 @@ module Text
   DARK_GRAY = 3.chr + '14'
   GRAY = 3.chr + '15'
 
-  class String
-    def color(color)
-      color + self.to_s + 3.chr
-    end
+  def self.color(string, color)
+    color + string.to_s + 3.chr
+  end
 
-    def bold
-      2.chr + self.to_s + 2.chr
-    end
+  def self.bold(string)
+    2.chr + string.to_s + 2.chr
   end
 end

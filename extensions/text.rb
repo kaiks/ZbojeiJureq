@@ -16,7 +16,7 @@ module Text
   GRAY = 3.chr + '15'
 
   def self.color(string, color)
-    color + string.to_s + 3.chr
+    color + 0.chr + string.to_s + 3.chr
   end
 
   def self.bold(string)

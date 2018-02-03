@@ -41,7 +41,7 @@ class BtcPlugin
     current_rounded_price = round_to_500(current_price)
     if btc_price_update?(current_price)
       color = current_rounded_price > @btc_price_checkpoint ? Text::GREEN : Text::RED
-      update_msg = "BTC price update: #{Text.bold(Text.color(current_price, color))}, was #{@btc_price_checkpoint}"
+      update_msg = "BTC price update: #{Text.color(Text.bold(current_price), color)}, was #{@btc_price_checkpoint}"
 
       Channel(MSG_CHANNEL).send(update_msg)
       @btc_price_checkpoint = round_to_500(current_price)

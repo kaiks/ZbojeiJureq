@@ -56,22 +56,25 @@ class NotePlugin
     m.channel.msg 'To post a note, type: .note [nick] [message]. To check your notes, type .mynotes'
   end
 
-  def notify(m)
-    user_notes = []
-    Note.where(:nick_to => m.user.to_s, :status => 0).order(:posted).all.each { |note|
-      user_notes << note.to_s
-      note.update(:status => 1)
-    }
-    if user_notes.size > 1
+  def send_notes(m, notes)
+    if notes.size > 1
       m.reply "You've got notes #{m.user.nick}!"
-      user_notes.each { |note|
+      delay = 1
+      user_notes.each do |note|
         m.reply note
-      }
-    elsif
-      user_notes.size == 1
-      m.reply "#{m.user.nick}: #{user_notes[0]}"
+        sleep(delay)
+        delay = [delay + 1, 5].min
+      end
+    else
+      m.reply "#{m.user.nick}: #{user_notes.first}"
     end
   end
 
+  def notify(m)
+    user_notes = Note.where(:nick_to => m.user.to_s, :status => 0).order(:posted)
+    return if user_notes.empty?
 
+    user_notes.update(status: 1)
+    send_notes(m, user_notes.all)
+  end
 end

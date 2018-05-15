@@ -60,13 +60,13 @@ class NotePlugin
     if notes.size > 1
       m.reply "You've got notes #{m.user.nick}!"
       delay = 1
-      user_notes.each do |note|
+      notes.each do |note|
         m.reply note
         sleep(delay)
         delay = [delay + 1, 5].min
       end
     else
-      m.reply "#{m.user.nick}: #{user_notes.first}"
+      m.reply "#{m.user.nick}: #{notes.first}"
     end
   end
 
@@ -74,7 +74,7 @@ class NotePlugin
     user_notes = Note.where(:nick_to => m.user.to_s, :status => 0).order(:posted)
     return if user_notes.empty?
 
-    user_notes.update(status: 1)
     send_notes(m, user_notes.all)
+    user_notes.update(status: 1)
   end
 end

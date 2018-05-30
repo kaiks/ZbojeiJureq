@@ -74,7 +74,7 @@ class NotePlugin
   def notify(m)
     user_notes = Note.
                   where(status: 0).
-                  where(Sequel.lit(%Q(LOWER(nick_from) = "#{m.user.to_s.downcase}"))).
+                  where(Sequel.lit(%Q(LOWER(nick_to) = "#{m.user.to_s.downcase}"))).
                   order(:posted)
     return if user_notes.empty?
 

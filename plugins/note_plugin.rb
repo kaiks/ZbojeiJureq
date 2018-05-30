@@ -35,7 +35,8 @@ class NotePlugin
 
   def show_notes(m)
     user_notes = []
-    Note.where(:nick_from => m.user.to_s, :status => 0).all.each { |note|
+    #.eval Note.where(Sequel.lit('LOWER(nick_from) = "kx"')).first
+    Note.where(status: 0).where(Sequel.lit(%Q(LOWER(nick_from) = #{m.user.to_s.downcase}))).all.each { |note|
       user_notes << note.to_s_for_sender
     }
     if user_notes.size == 0
@@ -71,7 +72,10 @@ class NotePlugin
   end
 
   def notify(m)
-    user_notes = Note.where(:nick_to => m.user.to_s, :status => 0).order(:posted)
+    user_notes = Note.
+                  where(status: 0).
+                  where(Sequel.lit(%Q(LOWER(nick_from) = #{m.user.to_s.downcase}))).
+                  order(:posted)
     return if user_notes.empty?
 
     send_notes(m, user_notes.all)

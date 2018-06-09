@@ -1,5 +1,6 @@
 require 'money'
-require 'money/bank/google_currency'
+require 'money_oxr/bank'
+#require 'money/bank/google_currency'
 
 class CurrencyPlugin
   include Cinch::Plugin
@@ -30,7 +31,11 @@ class CurrencyPlugin
   end
 
     def update_bank
-      Money.default_bank = Money::Bank::GoogleCurrency.new
+      Money.default_bank = MoneyOXR::Bank.new(
+        app_id: CONFIG['openexchangerates_api_key'],
+        cache_path: 'oxr.json',
+        max_age: 3600
+      )
       @last_update = Time.now
     end
 

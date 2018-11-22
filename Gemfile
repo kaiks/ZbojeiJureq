@@ -17,5 +17,6 @@ gem 'dentaku'
 gem 'money'
 #gem 'google_currency'
 gem 'money-oxr'
+gem 'ruby-fann'
 
 gem 'pasteit'

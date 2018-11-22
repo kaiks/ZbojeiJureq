@@ -25,7 +25,7 @@ class AntispamPlugin
     output
   end
 
-  def spam?(current)
+  def spam?(string)
     formatted_input = translate_input_element(string)
     @ai.run(formatted_input) > CONFIDENCE_THRESHOLD
   end

@@ -16,7 +16,7 @@ class WeatherPlugin
   match /w (00000\.[0-9\.]+)/i, method: :weather_zmw, group: :weathergroup
   match /w help/i,              method: :help, group: :weathergroup
   match /w (.+)/i,              method: :weather, group: :weathergroup
-  match /w/i,                   method: :registered_weather, group: :weathergroup
+  match /w\z/i,                 method: :registered_weather, group: :weathergroup
 
   def initialize(*args)
     @w_api = Wunderground.new(CONFIG['wunderground_api_key'])

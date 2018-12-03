@@ -4,8 +4,8 @@ class TemplatePlugin
   self.prefix = '.'
 
 
-  match /template/,         method: :message
-  match /template(\s[^\s].*)/, method: :help
+  match /template\z/,          method: :help
+  match /template(\s[^\s].*)/, method: :message
 
 
 

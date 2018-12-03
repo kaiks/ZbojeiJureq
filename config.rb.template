@@ -26,5 +26,7 @@ CONFIG = {
     'dropbox_upload'        => false,
     'dropbox_path'          => 'z:\\Dropbox',
 
-    'wunderground_api_key'  => 'YOUR_API_KEY'
+    'wunderground_api_key'  => 'YOUR_API_KEY',
+
+    'wolframalpha_api_key'  => 'YOUR_API_KEY'
 }

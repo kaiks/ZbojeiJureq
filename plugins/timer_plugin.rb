@@ -152,7 +152,7 @@ class TimerPlugin
   end
 
   def timer_help(m, arg)
-    m.channel.send 'example: .timer 5 m test - to get the timer manual, go to http://kx.shst.pl/help/timer.html'
+    m.channel.send 'example: .timer 5 m test - to get the timer manual, go to http://kaiks.eu/help/timer.html'
   end
 
 end

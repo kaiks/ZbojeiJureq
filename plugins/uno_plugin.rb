@@ -255,7 +255,7 @@ class UnoPlugin
   end
 
   def help(m)
-    m.reply '.uno -> .deal / .uno stop / .uno top / ... uno help available at http://kx.shst.pl/help/uno.html'
+    m.reply '.uno -> .deal / .uno stop / .uno top / ... uno help available at http://kaiks.eu/help/uno.html'
   end
 
   #todo: fix formatting

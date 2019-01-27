@@ -12,9 +12,9 @@ class AuthenticationPlugin
   include Cinch::Plugin
   self.prefix = '.'
   match /level/,                        method: :level
+  match /auth help/,                    group: :auth, method: :auth_help
   match /auth (.+)/,                    group: :auth, method: :auth_by_pass
   match /auth/,                         group: :auth, method: :auth
-
 
   match /add nick ([^\s]+) ([0-9]+)/,  group: :add, method: :add_nick
   match /add ident ([^\s]+) ([0-9]+)/, group: :add, method: :add_ident
@@ -22,11 +22,12 @@ class AuthenticationPlugin
   match /add auth ([^\s]+) ([0-9]+)/,  group: :add, method: :add_auth
   match /add.*/,                       group: :add, method: :add_help
   match /remove auth ([0-9]+)/,          group: :remove, method: :remove_auth
-  #match /eval (.*)/,                    method: :evaluate
 
   listen_to :join
-  #match /^command3 (.+)/, use_prefix: false
 
+  def auth_help(m)
+    m.reply 'To log in, try .auth, or .auth [password]. For add help, try .add help'
+  end
 
   def auth(m, arg = nil)
     m.user.authorize

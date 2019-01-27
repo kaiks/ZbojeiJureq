@@ -27,7 +27,7 @@ class AntispamPlugin
 
   def spam?(string)
     formatted_input = translate_input_element(string)
-    @ai.run(formatted_input) > CONFIDENCE_THRESHOLD
+    @ai.run(formatted_input)[0] > CONFIDENCE_THRESHOLD
   end
 
   def verify(m, text)

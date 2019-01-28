@@ -1,9 +1,9 @@
 # encoding: utf-8
 
-require './config.rb'
 require 'rubygems'
 require 'bundler/setup'
 Bundler.require
+require './config.rb'
 require 'cinch/plugins/identify'
 
 Dir.chdir(File.dirname(__FILE__))

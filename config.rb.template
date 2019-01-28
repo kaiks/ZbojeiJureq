@@ -28,5 +28,16 @@ CONFIG = {
 
     'wunderground_api_key'  => 'YOUR_API_KEY',
 
-    'wolframalpha_api_key'  => 'YOUR_API_KEY'
+    'wolframalpha_api_key'  => 'YOUR_API_KEY',
+    
+    'use_rollbar'           => false,
+    'rollbar_api_key'       => 'YOUR_API_KEY'
 }
+
+if CONFIG['use_rollbar']
+  require 'rollbar'
+
+  Rollbar.configure do |config|
+    config.access_token = CONFIG['rollbar_api_key']
+  end
+end

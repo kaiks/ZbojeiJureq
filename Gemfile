@@ -18,5 +18,6 @@ gem 'money'
 #gem 'google_currency'
 gem 'money-oxr'
 gem 'ruby-fann'
+gem 'rollbar'
 
 gem 'pasteit'

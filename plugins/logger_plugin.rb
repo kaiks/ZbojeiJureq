@@ -3,7 +3,6 @@
 #todo: search by nick
 
 require 'cinch'
-require 'pasteit'
 require 'digest/sha1'
 
 #based on Logging Plugin:
@@ -121,22 +120,17 @@ class LoggerPlugin
     end
     release_lock
     m.reply results[0]
-    begin
-      m.reply 'moar: ' + Pasteit::PasteTool.new(results.join).upload! unless results.length < 2
-    rescue
-      puts 'pasteit didnt work, initializing fallback'
-      results = results.join
+    results = results.join
 
-      result_digest = Digest::SHA1.hexdigest(results)
-      filename = result_digest[0..4] + result_digest[-5..-1] + '.txt'
-      filepath = 'tmp_files/' + filename
-      if File.exist?(filepath)
-        m.reply "moar: #{CONFIG['ftp_result_url'] + 'logs/' + filename}"
-      else
-        tmp_file = File.write('tmp_files/' + filename, results)
-        result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
-        m.reply "moar: #{result}"
-      end
+    result_digest = Digest::SHA1.hexdigest(results)
+    filename = result_digest[0..4] + result_digest[-5..-1] + '.txt'
+    filepath = 'tmp_files/' + filename
+    if File.exist?(filepath)
+      m.reply "moar: #{CONFIG['ftp_result_url'] + 'logs/' + filename}"
+    else
+      tmp_file = File.write('tmp_files/' + filename, results)
+      result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
+      m.reply "moar: #{result}"
     end
   end
 

@@ -19,5 +19,3 @@ gem 'money'
 gem 'money-oxr'
 gem 'ruby-fann'
 gem 'rollbar'
-
-gem 'pasteit'

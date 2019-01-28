@@ -42,7 +42,6 @@ $bot = Cinch::Bot.new do
 
 end
 
-$bot.loggers << Cinch::LoggerPlugin
 if CONFIG['use_rollbar']
   $bot.loggers << Cinch::Logger::RollbarLogger.new
   $bot.loggers[1].level = :error

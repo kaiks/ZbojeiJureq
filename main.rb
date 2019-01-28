@@ -43,7 +43,7 @@ $bot = Cinch::Bot.new do
 end
 
 if CONFIG['use_rollbar']
-  $bot.loggers << Cinch::Logger::RollbarLogger.new
+  $bot.loggers << Cinch::Logger::RollbarLogger.new(nil)
   $bot.loggers[1].level = :error
 end
 $bot.start

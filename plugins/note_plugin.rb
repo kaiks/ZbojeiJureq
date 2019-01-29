@@ -41,7 +41,7 @@ class NotePlugin
   match /note(\s[^\s].*)?/, group: :note, method: :help
 
   match /mynotes/,  group: :note, method: :show_notes
-  match /timenote help/, group: :timenote, method: :timenote
+  match /timenote help/, group: :timenote, method: :timenote_help
   match /timenote ([0-9]{1,2}\.[0-9]{1,2}\.20[0-9]{2}) ([0-9]{1,2}:[0-9]{1,2}) (#{NICK_REGEXP}) (.+)/, group: :timenote, method: :timenote
   match /timenote ([0-9]{1,2}:[0-9]{1,2}) (#{NICK_REGEXP}) (.+)/, group: :timenote, method: :timenote_today
 

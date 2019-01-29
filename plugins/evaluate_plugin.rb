@@ -4,8 +4,12 @@ class EvaluatePlugin
   match /eval (.+)/, method: :evaluate
 
   def evaluate(m, arg)
-    if m.user.level == 100
+    return unless m.user.level == 100
+
+    begin
       m.reply eval(arg)
+    rescue StandardError => e
+      m.reply e.message
     end
   end
 end

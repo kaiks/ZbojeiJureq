@@ -25,7 +25,7 @@ class WolframPlugin
   end
 
   def message(m, query_text)
-    m.reply query_wa(query_text)
+    m.safe_reply query_wa(query_text)
   end
 
   def help(m)

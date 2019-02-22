@@ -30,13 +30,16 @@ class UnoGame
     db_create_game
   end
 
+  def started?
+    @game_state > 0
+  end
 
   def start_game stack = nil, first_player = nil
     if @players.length < 2
       notify 'You need at least two players to start a game.'
       return
     end
-    if @game_state > 0
+    if started?
       notify 'Cards have already been dealt.'
       return
     end

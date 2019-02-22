@@ -70,9 +70,8 @@ class UnoPlugin
   end
 
   def debug(m, text)
-    if m.user.has_admin_access?
-      m.reply "#{eval m.message[11..1000]}"
-    end
+    return unless f m.user.has_admin_access?
+    m.reply eval(text)
   end
 
   def testing(m)
@@ -81,8 +80,8 @@ class UnoPlugin
   end
 
   def ca(m)
-    if @game.players.map{|nick| nick.nick }.member? m.user.nick
-      @game.show_player_cards @game.players.find{|p| m.user.nick==p.nick}
+    if @game.players.map(&:nick).member? m.user.nick
+      @game.show_player_cards(@game.players.find{ |p| m.user.nick==p.nick })
     end
     if @game.game_state > 0
       @game.show_card_count
@@ -90,13 +89,12 @@ class UnoPlugin
   end
 
   def cd(m)
-    if @game.players.map{|nick| nick.nick }.member? m.user.nick
-      @game.notify_top_card
-    end
+    return unless @game.players.map(&:nick).member? m.user.nick
+    @game.notify_top_card
   end
 
   def get_stack_size(m)
-    m.reply "#{@game.card_stack.length} cards left in the stack" if @game.game_state > 0
+    m.reply "#{@game.card_stack.length} cards left in the stack" if @game.started?
   end
 
 
@@ -114,7 +112,7 @@ class UnoPlugin
         else
           @game.start_game
         end
-      elsif @game.game_state > 0
+      elsif @game.started?
         m.reply 'Cards have already been dealt.'
       else
         m.reply "#{@game.creator.to_s} needs to deal"
@@ -124,7 +122,7 @@ class UnoPlugin
 
   def join(m)
     puts "Current players: " + @game.players.to_s
-    if @game.players.find{|p| m.user.nick==p.nick}.nil?
+    if @game.players.find{ |p| m.user.nick == p.nick }.nil?
       new_player = UnoPlayer.new(m.user.nick)
       @game.add_player new_player
     else
@@ -133,7 +131,8 @@ class UnoPlugin
   end
 
   def order(m)
-    @game.notify "Current order: #{@game.players.map{|p| p.nick}.join(' ')}"
+    players_ordered = @game.players.map(&:nick).join(' ')
+    @game.notify "Current order: #{players_ordered}"
   end
 
   def pass(m)
@@ -153,8 +152,10 @@ class UnoPlugin
   end
 
   def is_a_double_card_string? text
-    l = text.length
-    (l > 3) and ((l % 2) == 0) and (text[0..l/2-1] == text[l/2..l]) and (l[1] != 'd') #even length, not a wd4
+    length = text.length
+    length > 3 && length.even? &&
+      (text[0..(length / 2 - 1)] == text[(length / 2)..length]) &&
+      text[1] != 'd' #even length, not a wd4
   end
 
   def play(m)
@@ -165,33 +166,31 @@ class UnoPlugin
         card = nil
         #make it dry
         if is_a_double_card_string?(proposed_card_text)
-          puts "#{proposed_card_text}"
-          card_text = proposed_card_text[0..proposed_card_text.length/2-1]
+          puts proposed_card_text.to_s
+          card_text = proposed_card_text[0..(proposed_card_text.length / 2 - 1)]
         end
 
         if card_text =~ /w[rgby]/
           card = @game.players[0].hand.reverse.find_card('w') #bug 1
           card.set_wild_color Uno::expand_color card_text[1] unless card.nil?
-        elsif card_text =~/wd4[rgby]/
+        elsif card_text =~ /wd4[rgby]/
           card = @game.players[0].hand.reverse.find_card('wd4')
           card.set_wild_color Uno::expand_color card_text[3] unless card.nil?
         elsif card_text =~ /^[^w]+$/i
           card = @game.players[0].hand.reverse.find_card(card_text)
         end
-        puts "Proposed card text: " + proposed_card_text
-        success = @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
+        puts "Proposed card text: #{proposed_card_text}"
+        @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
         @game.players[0].hand.reset_wilds
       end
     }
   end
 
-
-
   def start(m)
     @semaphore.synchronize {
       if @game.nil?
         @game = (IrcUnoGame.new m.user.nick)
-        @game.irc ||= $bot
+        @game.irc ||= @bot
         @game.plugin ||= self
         m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
         join(m)
@@ -205,7 +204,7 @@ class UnoPlugin
     @semaphore.synchronize {
       if @game.nil?
         @game = IrcUnoGame.new(m.user.nick, 1)
-        @game.irc ||= $bot
+        @game.irc ||= @bot
         @game.plugin ||= self
         m.reply "Ok, created casual 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
         join(m)
@@ -226,8 +225,6 @@ class UnoPlugin
 
   def top(m, n = 5)
     counter = 0
-
-    n ||= 5
     n = n.to_i
 
     m.reply '   ' + "nick".ljust(20) + 'points  games  average  wins  winrate - full list: http://uno.kaiks.eu '
@@ -251,12 +248,21 @@ class UnoPlugin
     m.reply '.uno -> .deal / .uno stop / .uno top / ... uno help available at http://kaiks.eu/help/uno.html'
   end
 
+  def winrate(games, wins)
+    if games.zero?
+      0.0
+    else
+      (100.to_f * wins / games).round(2)
+    end
+  end
+
   #todo: fix formatting
   def score(m, user)
     r = UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE nick = ?',user].first
     games = r[:games]
     wins = r[:wins]
-    winrate = games == 0 ? 0.0 : (100.to_f*(wins.to_f / games.to_f)).round(2)
+    winrate = winrate(games, wins)
+
     avg = r[:'ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2)']
     m.reply "#{r[:nick]}: #{avg} avg #{r[:total_score]} pts #{games} games #{wins} wins #{winrate}% winrate"
   end

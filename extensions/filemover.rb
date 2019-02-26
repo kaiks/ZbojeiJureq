@@ -17,7 +17,7 @@ module Cinch
     def upload_to_dropbox file, path = '', filename=file.split('/')[-1]
       #self.config.shared[:database]
       return unless CONFIG['dropbox_upload']
-      path += '\\' unless path='' || path[-1] == '\\'
+      path += '\\' unless path == '' || path[-1] == '\\'
       FileUtils.cp file, DROPBOX_PATH + path + filename
     end
 
@@ -30,9 +30,9 @@ module Cinch
       ftp.putbinaryfile(sourcefile, filename)
       ftp.close
 
-      FTP_RESULT_URL + path + '/' + filename
-
-    rescue Exception => err
+      return (FTP_RESULT_URL + path + '/' + filename).gsub('//', '/')
+    rescue StandardError => err
+      puts "error:"
       puts err.message
       false
     end

@@ -108,18 +108,17 @@ class LoggerPlugin
     @logfile.rewind
     @logfile.each_line do |line|
       ls = line.split
-      if ls[0]=='Session' && (ls[1]=='Start:' || ls[1]=='Time:')
+      if ls[0] == 'Session' && (ls[1] == 'Start:' || ls[1] == 'Time:')
         timestamp = ls[6] + ' ' + ls[3..4].to_s
       elsif ls[0] =~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9]$/
         timestamp = ls[0] + ' '
-      else
-        if (line.include?(pattern)) && (!ls[0].nil?)
+      elsif line.include?(pattern) && !ls[0].nil?
           results += [timestamp + line] unless ls[0].include?('ZbojeiJureq') || line.include?('> .log old')
-        end
       end
     end
     release_lock
-    m.reply results[0]
+    m.reply results[0] if results[0]
+    return if results.length <= 1
     results = results.join
 
     result_digest = Digest::SHA1.hexdigest(results)

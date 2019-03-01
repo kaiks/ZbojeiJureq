@@ -3,12 +3,12 @@ class ProtectPlugin
 
   self.prefix = '.'
 
-  listen_to :deop,    :method => :unban
-  listen_to :ban,     :method => :ban
-  listen_to :join,    :method => :join
+  listen_to :deop,    method: :unban
+  listen_to :ban,     method: :ban
+  listen_to :join,    method: :join
 
   match /op\z/, method: :op_self
-  match /op ([^\s]+)\z/, method: :op_user
+  match /op ([^\s]+)\z/, method: :op
 
   match /kick ([^\s]+)\z/, method: :kick_user
 
@@ -21,34 +21,31 @@ class ProtectPlugin
   end
 
   def op_self(m)
-    return if m.user.has_admin_access?
+    return unless m.user.has_admin_access?
     m.channel.op(m.user)
   end
 
   def op(m, user)
-    return if m.user.has_admin_access?
-    m.channel.op(m.channel.get_user(nick))
+    return unless m.user.has_admin_access?
+    m.channel.op(m.channel.get_user(user))
   end
 
   def voice_self(m)
-    return if m.user.has_admin_access?
+    return unless m.user.has_admin_access?
     m.channel.voice(m.user)
   end
 
   def voice(m, user)
-    return if m.user.has_admin_access?
-    m.channel.voice(m.channel.get_user(nick))
+    m.channel.voice(m.channel.get_user(user))
   end
 
   def kick(m, user)
-    return if m.user.has_admin_access?
-    m.channel.kick(m.channel.get_user(nick))
+    return unless m.user.has_admin_access?
+    m.channel.kick(m.channel.get_user(user))
   end
 
-
-
   def ban(m, ban)
-    return if m.user.has_admin_access?
+    return unless m.user.has_admin_access?
     m.channel.unban(ban.mask)
   end
 

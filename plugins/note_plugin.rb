@@ -100,7 +100,7 @@ class NotePlugin
       return m.reply(e.message)
     end
 
-    save_note(from: m.user.to_s, to: recipient, message: text, due: time)
+    save_note(from: m.user.to_s, to: recipient, message: message, due: time)
     m.user.send("Got it. Message will be delivered after #{time}", true)
   end
 

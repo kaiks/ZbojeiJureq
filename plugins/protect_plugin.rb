@@ -13,6 +13,7 @@ class ProtectPlugin
   match /kick ([^\s]+)\z/, method: :kick_user
 
   match /v\z/, method: :voice_self
+  match /v (#[^\s]+)\z/, method: :voice_channel
   match /v ([^\s]+)\z/, method: :voice_user
 
 
@@ -33,6 +34,10 @@ class ProtectPlugin
   def voice_self(m)
     return unless m.user.has_admin_access?
     m.channel.voice(m.user)
+  end
+
+  def voice_channel(m, channel)
+    Channel(channel).voice(m.user)
   end
 
   def voice(m, user)

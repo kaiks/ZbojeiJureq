@@ -13,8 +13,8 @@ class ProtectPlugin
   match /kick ([^\s]+)\z/, method: :kick_user
 
   match /v\z/, method: :voice_self
-  match /v (#[^\s]+)\z/, method: :voice_channel
-  match /v ([^\s]+)\z/, method: :voice_user
+  match /v (#[^\s]+)\z/, method: :voice_channel, group: :voice
+  match /v ([^\s]+)\z/, method: :voice_user, group: :voice
 
 
   def initialize(*args)

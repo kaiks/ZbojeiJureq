@@ -40,7 +40,7 @@ class ProtectPlugin
     Channel(channel).voice(m.user)
   end
 
-  def voice(m, user)
+  def voice_user(m, user)
     m.channel.voice(m.channel.get_user(user))
   end
 

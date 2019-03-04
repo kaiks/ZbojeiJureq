@@ -7,6 +7,7 @@ require 'thread'
 #game states: 0 OFF, 1 ON, 2 WAR, 3WARWD
 
 class UnoGame
+  prepend ThreadSafeDefault
   attr_reader :players, :top_card, :game_state, :creator
   attr_reader :card_stack
   attr_reader :starting_stack, :first_player

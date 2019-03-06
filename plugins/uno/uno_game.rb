@@ -27,7 +27,6 @@ class UnoGame
     @casual = casual
     @full_deck = CardStack.new
     @full_deck.fill
-    @semaphore = Mutex.new
     db_create_game
   end
 
@@ -481,15 +480,11 @@ class IrcUnoGame < UnoGame
   attr_accessor :plugin
 
   def notify text
-    @semaphore.synchronize {
-      @irc.Channel('#kx').send text
-    }
+    @irc.Channel('#kx').send text
   end
 
   def notify_player p, text
-    @semaphore.synchronize {
-      @irc.User(p.nick).notice text
-    }
+    @irc.User(p.nick).notice text
   end
 
   def clean_up_end_game

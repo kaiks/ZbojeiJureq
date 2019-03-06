@@ -1,9 +1,3 @@
-#todo: quit
-#todo: help
-#todo: fix wild
-
-
-#todo: make it thread safe
 require 'thread'
 require './plugins/uno/uno_game.rb'
 require './plugins/uno/uno_db.rb'
@@ -69,7 +63,7 @@ class UnoPlugin
   end
 
   def debug(m, text)
-    return unless f m.user.has_admin_access?
+    return unless m.user.has_admin_access?
     m.reply eval(text)
   end
 

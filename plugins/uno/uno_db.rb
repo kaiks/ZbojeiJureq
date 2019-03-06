@@ -7,12 +7,11 @@ class UnoGameModel < Sequel::Model(UNODB[:games])
 end
 
 class UnoTurnModel < Sequel::Model(UNODB[:turn])
-
 end
 
-#0 - join
-#1 - remove
-#2 - stop
+# 0 - join
+# 1 - remove
+# 2 - stop
 class UnoActionModel < Sequel::Model(UNODB[:player_action])
 end
 

@@ -1,4 +1,4 @@
-##todo: irc format card display
+# #todo: irc format card display
 require './plugins/uno/uno.rb'
 
 class UnoCard
@@ -7,7 +7,7 @@ class UnoCard
   attr_reader :color, :figure
   attr_accessor :visited, :debug
 
-  def self.debug text
+  def self.debug(text)
     puts text if @debug
   end
 
@@ -26,11 +26,11 @@ class UnoCard
   end
 
   def <=>(card)
-    @figure <=> card.figure and @color <=> card.color
+    @figure <=> card.figure && @color <=> card.color
   end
 
   def ==(card)
-    @figure.to_s == card.figure.to_s and @color == card.color
+    (@figure.to_s == card.figure.to_s) && (@color == card.color)
   end
 
   def self.parse(card_text)
@@ -45,28 +45,28 @@ class UnoCard
     color = Uno.expand_color(short_color)
     figure = Uno.expand_figure(short_figure)
 
-    return UnoCard.new(color, figure)
+    UnoCard.new(color, figure)
   end
 
   def self.parse_wild(card_text)
     card_text = card_text.downcase
     debug "parsing #{card_text}"
-    if card_text[0..1].downcase == 'ww'
+    if card_text[0..1].casecmp('ww').zero?
       debug '--WARNING: WILD CARD ' + card_text
       color = :wild
       short_figure = card_text[1..100]
     else
-      short_figure = card_text[1].downcase == 'd' ? 'wd4' : 'w'
+      short_figure = card_text[1].casecmp('d').zero? ? 'wd4' : 'w'
       short_color = card_text[-1]
-      if short_color == '4'
-        color = :wild
-      else
-        color = Uno.expand_color(short_color)
-      end
+      color = if short_color == '4'
+                :wild
+              else
+                Uno.expand_color(short_color)
+              end
     end
 
     figure = Uno.expand_figure(short_figure)
-    return UnoCard.new(color, figure)
+    UnoCard.new(color, figure)
   end
 
   def to_s
@@ -78,50 +78,48 @@ class UnoCard
   end
 
   def to_irc_s
-    #IRC_COLOR_CODES.fetch(normalize_color.to_s,'13')
+    # IRC_COLOR_CODES.fetch(normalize_color.to_s,'13')
     "#{3.chr}#{color_number}[#{normalize_figure.to_s.upcase}]"
   end
 
   def bot_output
-    "#{3.chr}#{color_number.to_s}[#{normalize_figure}]"
+    "#{3.chr}#{color_number}[#{normalize_figure}]"
   end
 
   def set_wild_color(color)
     @color = color if special_valid_card?
   end
-  
+
   def unset_wild_color
     @color = :wild if special_valid_card?
   end
 
-
-
   def color_number
     case @color
-      when :green
-        3#:green
-      when :red
-        4#:red
-      when :yellow
-        7#:yellow
-      when :blue
-        12#:blue
-      when :wild
-        13#:blue
+    when :green
+      3 #:green
+    when :red
+      4 #:red
+    when :yellow
+      7 #:yellow
+    when :blue
+      12 #:blue
+    when :wild
+      13 #:blue
     end
   end
 
   def normalize_color
     if Uno::COLORS.member? @color
-      return Uno::SHORT_COLORS[Uno::COLORS.find_index @color]
+      Uno::SHORT_COLORS[Uno::COLORS.find_index @color]
     else
       throw 'not a valid color'
     end
   end
 
-  def self.normalize_color color
+  def self.normalize_color(color)
     if Uno::COLORS.member? color
-      return Uno::SHORT_COLORS[Uno::COLORS.find_index color]
+      Uno::SHORT_COLORS[Uno::COLORS.find_index color]
     else
       throw 'not a valid color'
     end
@@ -129,13 +127,13 @@ class UnoCard
 
   def normalize_figure
     if Uno::FIGURES.member? @figure
-      return Uno::SHORT_FIGURES[Uno::FIGURES.find_index @figure]
+      Uno::SHORT_FIGURES[Uno::FIGURES.find_index @figure]
     end
   end
 
-  def self.normalize_figure figure
+  def self.normalize_figure(figure)
     if Uno::FIGURES.member? figure
-      return Uno::SHORT_FIGURES[Uno::FIGURES.find_index figure]
+      Uno::SHORT_FIGURES[Uno::FIGURES.find_index figure]
     end
   end
 
@@ -143,15 +141,15 @@ class UnoCard
     Uno::COLORS.member? @color
   end
 
-def self.valid_color? color
+  def self.valid_color?(color)
     Uno::COLORS.member? color
-  end
+    end
 
   def valid_figure?
     Uno::FIGURES.member? @figure
   end
 
-  def self.valid_figure? figure
+  def self.valid_figure?(figure)
     Uno::FIGURES.member? figure
   end
 
@@ -181,23 +179,22 @@ def self.valid_color? color
     end
   end
 
-
   def is_war_playable?
     ['+2', 'reverse', 'wild+4'].member? @figure
   end
 
   def plays_after?(card)
-    (@color == :wild) || (card.color == :wild) || card.figure == @figure || card.color == @color || (self.special_valid_card?)
+    (@color == :wild) || (card.color == :wild) || card.figure == @figure || card.color == @color || special_valid_card?
   end
 
   def is_regular?
-    figure.is_a? Fixnum
+    figure.is_a? Integer
   end
 
   def value
     return 50 if special_valid_card?
-    return @figure if figure.is_a? Fixnum
-    return 20
+    return @figure if figure.is_a? Integer
+    20
   end
 
   def playability_value
@@ -205,9 +202,7 @@ def self.valid_color? color
     return -5 if special_valid_card?
     return -3 if is_offensive?
     return -2 if is_war_playable?
-    return @figure if figure.is_a? Fixnum
-    return 0 #if skip
+    return @figure if figure.is_a? Integer
+    0 # if skip
   end
-
 end
-

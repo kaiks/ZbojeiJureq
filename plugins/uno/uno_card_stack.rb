@@ -2,35 +2,29 @@ require './plugins/uno/uno_card.rb'
 require './plugins/uno/uno_hand.rb'
 
 class CardStack < Hand
-
   def create_discard_pile
     @discard_pile = Hand.new
   end
 
   def fill
-    Uno::STANDARD_SHORT_FIGURES.each { |f|
-      ['r','g','b','y'].each { |c|
+    Uno::STANDARD_SHORT_FIGURES.each do |f|
+      %w[r g b y].each do |c|
         self << UnoCard.parse(c + f)
-        if f != '0'
-          self << UnoCard.parse(c + f)
-        end
-      }
-    }
+        self << UnoCard.parse(c + f) if f != '0'
+      end
+    end
 
-    4.times {
+    4.times do
       self << UnoCard.parse('ww')
       self << UnoCard.parse('wd4')
-    }
+    end
   end
 
-  #shuffle!
-
+  # shuffle!
 
   def pick(n)
-    to_return = CardStack.new(self.first(n))
+    to_return = CardStack.new(first(n))
     shift(n)
-    return to_return
+    to_return
   end
-
-
 end

@@ -9,6 +9,6 @@ class UnoDeck
 
     deck += deck
 
-    deck.find()
+    deck.find
   end
 end

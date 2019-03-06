@@ -11,7 +11,7 @@ class UnoPlayer
     nick
   end
 
-  def change_nick new_nick
+  def change_nick(new_nick)
     @nick = new_nick
   end
 

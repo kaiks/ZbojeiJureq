@@ -1,10 +1,10 @@
-##todo: game cancel -> actions
+# #todo: game cancel -> actions
 
 require './plugins/uno/uno_card_stack.rb'
 require './plugins/uno/uno_player.rb'
 require 'thread'
 
-#game states: 0 OFF, 1 ON, 2 WAR, 3WARWD
+# game states: 0 OFF, 1 ON, 2 WAR, 3WARWD
 
 class UnoGame
   prepend ThreadSafeDefault
@@ -34,7 +34,7 @@ class UnoGame
     @game_state > 0
   end
 
-  def start_game stack = nil, first_player = nil
+  def start_game(stack = nil, first_player = nil)
     if @players.length < 2
       notify 'You need at least two players to start a game.'
       return
@@ -59,8 +59,6 @@ class UnoGame
 
     top_card = @card_stack.pick(1)[0]
 
-
-
     put_card_on_top top_card
 
     rotated = false
@@ -70,9 +68,9 @@ class UnoGame
       @first_player = @players[0].nick
     else
       if @players[0].nick == first_player
-        puts "rotate1"
+        puts 'rotate1'
         rotated = true
-        @players.rotate! #other player has to start with same hand
+        @players.rotate! # other player has to start with same hand
       end
     end
 
@@ -80,10 +78,9 @@ class UnoGame
 
     db_save_card top_card, nil
 
-
-    @start = Time.now.strftime("%F %T")
-    #@players.rotate! if rotated
-    #puts "rotate2" if rotated
+    @start = Time.now.strftime('%F %T')
+    # @players.rotate! if rotated
+    # puts "rotate2" if rotated
     next_turn
   end
 
@@ -94,17 +91,17 @@ class UnoGame
     end
   end
 
-  def put_card_on_top card
+  def put_card_on_top(card)
     accord_game_state_to_card_played card
     @locked = true
     @played_cards << card
     @top_card = card
   end
 
-  def accord_game_state_to_card_played card
+  def accord_game_state_to_card_played(card)
     @stacked_cards += card.offensive_value
 
-    if @game_state < card.offensive_value #this is stupid code but whatever
+    if @game_state < card.offensive_value # this is stupid code but whatever
       if card.offensive_value == 2
         @game_state = 2
       elsif card.offensive_value == 4
@@ -117,15 +114,15 @@ class UnoGame
     end
   end
 
-  def next_turn pass = false
+  def next_turn(pass = false)
     manage_order_by_card @top_card, pass
     notify_top_card pass
     show_player_cards @players[0]
     @already_picked = false
   end
 
-  def show_player_cards player
-    notify_player player, "#{player.hand.to_irc_s}"
+  def show_player_cards(player)
+    notify_player player, player.hand.to_irc_s.to_s
   end
 
   def show_card_count
@@ -133,51 +130,51 @@ class UnoGame
   end
 
   def deal_cards_to_players
-    @players.each { |p|
+    @players.each do |p|
       deal_cards_to_player p
-    }
+    end
   end
 
-  def deal_cards_to_player p
+  def deal_cards_to_player(p)
     p.hand << @card_stack.pick(7)
-    p.hand.each { |card|
+    p.hand.each do |card|
       db_save_card card, p.to_s, 1
-    }
+    end
     p.hand.sort! { |a, b| a.to_s <=> b.to_s }
   end
 
   def check_for_empty_stack(n = 0)
     if @card_stack.length <= n
       notify 'Reshuffling discard pile.'
-      @played_cards.each { |c| c.unset_wild_color }
+      @played_cards.each(&:unset_wild_color)
       @card_stack << @played_cards
       @played_cards = CardStack.new
       @card_stack.shuffle!
     end
   end
 
-  def give_cards_to_player p, n
+  def give_cards_to_player(p, n)
     check_for_empty_stack(n)
     @already_picked = true
     picked = @card_stack.pick(n)
-    picked.each { |card|
+    picked.each do |card|
       db_save_card card, p.to_s, 1
-    }
+    end
 
-    notify_player(p, "You draw #{n} card#{n>1 ? 's' : ''}: #{picked.to_irc_s}")
+    notify_player(p, "You draw #{n} card#{n > 1 ? 's' : ''}: #{picked.to_irc_s}")
     p.hand << picked
 
     p.hand.sort! { |a, b| a.to_s <=> b.to_s }
 
     @game_state = 1
     @stacked_cards = 0
-    return picked
+    picked
   end
 
   def turn_pass
     if @already_picked == false
       if @stacked_cards == 0
-        notify "You have to pick a card first."
+        notify 'You have to pick a card first.'
         return
       else
         give_cards_to_player @players[0], @stacked_cards
@@ -187,7 +184,7 @@ class UnoGame
   end
 
   def pick_single
-    if @already_picked == false and @stacked_cards == 0
+    if (@already_picked == false) && (@stacked_cards == 0)
       @already_picked = true
       notify "#{@players[0]} draws a card."
       @picked_card = (give_cards_to_player @players[0], 1)[0]
@@ -196,17 +193,16 @@ class UnoGame
     end
   end
 
-  def card_played card
+  def card_played(card)
     @locked = true
     @played_cards << card
   end
 
-
-  def notify_player_turn p
+  def notify_player_turn(p)
     notify "Hey #{p} it's your turn!"
   end
 
-  def add_player p
+  def add_player(p)
     if @locked == false
       @players.push p
       @players.shuffle!
@@ -217,36 +213,33 @@ class UnoGame
     end
   end
 
-  def remove_player p
+  def remove_player(p)
     @players.delete! p
-    if @players.length == 0
-      stop_game p.nick
-    end
+    stop_game p.nick if @players.empty?
   end
 
-  def stop_game nick
+  def stop_game(nick)
     db_stop nick unless @casual == 1
   end
 
-  def rename_player old_nick, new_nick
-    @players.detect { |player| player.nick==old_nick }.nick = new_nick
+  def rename_player(old_nick, new_nick)
+    @players.detect { |player| player.nick == old_nick }.nick = new_nick
   end
 
   def notify_order
     notify 'Current player order is: ' + @players.join(' ')
   end
 
-  def notify_top_card passes = false
-    pass_string = (passes == true) ? "#{@players[-1]} passes. " : ''
+  def notify_top_card(passes = false)
+    pass_string = passes == true ? "#{@players[-1]} passes. " : ''
     notify "#{pass_string}#{@players[0]}'s turn. Top card: #{@top_card.to_irc_s}"
   end
 
-  def notify text
+  def notify(text)
     puts text
   end
 
-  def clean_up_end_game #virtual method for child classes
-  end
+  def clean_up_end_game; end
 
   def notify_player(p, text)
     puts "[To #{p}]: #{text}"
@@ -256,25 +249,24 @@ class UnoGame
     puts "-debug- #{text}"
   end
 
-  def playable_now? card
+  def playable_now?(card)
     return false unless card.plays_after?(@top_card)
-
 
     if @game_state > 1
       return false unless card.is_war_playable?
       if @game_state == 3
-        return false if card.figure != 'reverse' and !card.special_card?
+        return false if (card.figure != 'reverse') && !card.special_card?
       end
     end
-    debug "playable: all passed"
-    return true
+    debug 'playable: all passed'
+    true
   end
 
-  def manage_order_by_card card, pass
-    if card.figure == 'reverse' and pass == false
-      notify "Player order reversed#{@double_play ? " twice" : ""}!"
+  def manage_order_by_card(card, pass)
+    if (card.figure == 'reverse') && (pass == false)
+      notify "Player order reversed#{@double_play ? ' twice' : ''}!"
       @players.reverse! unless @double_play
-    elsif card.figure == 'skip' and pass == false
+    elsif (card.figure == 'skip') && (pass == false)
       if @double_play
         notify "#{@players[1]} and #{@players.fetch(2, @players[0])} were skipped!"
         @players.rotate! 3
@@ -292,11 +284,11 @@ class UnoGame
     debug "#{player} plays #{card}"
     if @players[0] == player
       if card.nil?
-        notify "You do not have that card."
+        notify 'You do not have that card.'
         return false
       end
       if playable_now? card
-        #todo: fix the wd4 stuff
+        # TODO: fix the wd4 stuff
         if @already_picked == true && (@picked_card.to_s != card.to_s && @picked_card.to_s != 'wd4')
           notify 'Sorry, you have to play the card you picked.'
           return false
@@ -312,7 +304,7 @@ class UnoGame
             return false
           end
           debug 'we are actually trying to double play'
-          #throw 'Hey, these cards are not the same!' unless card.to_s == second.to_s
+          # throw 'Hey, these cards are not the same!' unless card.to_s == second.to_s
           card = @players[0].hand.find_card card.to_s
           unless card.nil?
             @double_play = true
@@ -323,7 +315,7 @@ class UnoGame
           end
         end
 
-        #notify "#{player} played #{card}!"
+        # notify "#{player} played #{card}!"
 
         check_for_number_of_cards_left player
 
@@ -343,41 +335,40 @@ class UnoGame
       card.set_wild_color :wild
       false
     end
-
   end
 
   def player_with_no_cards_exists?
-    @players.each { |p|
-      return true if p.hand.size == 0
-    }
-    return false
+    @players.each do |p|
+      return true if p.hand.empty?
+    end
+    false
   end
 
   def finish_game
     @game_state = 0
     give_cards_to_player @players[1], @stacked_cards if @stacked_cards > 0
 
-    @total_score = @players.map { |p| p.hand.value }.inject(:+) #tally up points
+    @total_score = @players.map { |p| p.hand.value }.inject(:+) # tally up points
 
-    #min score per game
+    # min score per game
     @total_score = [@total_score, 30].max
 
     winning_string = "#{@players[0]} gains #{@total_score} points."
     if @casual != 1
       db_update_after_game_ended
       player_stats = UnoRankModel[@players[0].to_s]
-      winning_string += "For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
+      winning_string += " For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
     end
     notify winning_string
     clean_up_end_game
   end
 
-  def end_game(nick) #todo
-    @game.end = Time.now.strftime("%F %T")
+  def end_game(_nick) # todo
+    @game.end = Time.now.strftime('%F %T')
     @game.save
   end
 
-  def check_for_number_of_cards_left player
+  def check_for_number_of_cards_left(player)
     if player.hand.length == 1
       notify "04U09N12O08! #{player} has just one card left!"
     elsif player.hand.length == 3
@@ -385,16 +376,16 @@ class UnoGame
     end
   end
 
-  def db_save_card card, player, received = 0
+  def db_save_card(card, player, received = 0)
     unless @casual == 1
       dbcard = UnoTurnModel.create(
-          :card => card.to_s,
-          :figure => card.normalize_figure,
-          :color => card.normalize_color,
-          :player => player.to_s,
-          :received => received,
-          :time => Time.now.strftime("%F %T"),
-          :game => @game.ID
+        card: card.to_s,
+        figure: card.normalize_figure,
+        color: card.normalize_color,
+        player: player.to_s,
+        received: received,
+        time: Time.now.strftime('%F %T'),
+        game: @game.ID
       )
       dbcard.save
     end
@@ -403,8 +394,8 @@ class UnoGame
   def db_create_game
     unless @casual == 1
       @game = UnoGameModel.create(
-          :start => Time.now.strftime("%F %T"),
-          :created_by => @creator
+        start: Time.now.strftime('%F %T'),
+        created_by: @creator
       )
       @game.save
     end
@@ -415,13 +406,12 @@ class UnoGame
       @game.points = @total_score
 
       @game.winner = @players[0]
-      @game.end = Time.now.strftime("%F %T")
+      @game.end = Time.now.strftime('%F %T')
       @game.players = @players.size
 
       db_update_player_rank
 
-
-      players_game_no = UNODB[:uno].where(:nick => @players[0].to_s).first[:games]
+      players_game_no = UNODB[:uno].where(nick: @players[0].to_s).first[:games]
       @game.game = players_game_no
       @game.save
     end
@@ -429,12 +419,10 @@ class UnoGame
 
   def db_update_player_rank
     unless @casual == 1
-      @players.each { |p|
+      @players.each do |p|
         player_record = UnoRankModel[p.to_s]
 
-        if player_record.nil?
-          player_record = UnoRankModel.create(:nick => p.to_s)
-        end
+        player_record = UnoRankModel.create(nick: p.to_s) if player_record.nil?
 
         player_record.games += 1
         if p == @players[0]
@@ -444,68 +432,62 @@ class UnoGame
         end
 
         player_record.save
-      }
+      end
     end
   end
 
-  def db_player_joins player
+  def db_player_joins(player)
     unless @casual == 1
       action = UnoActionModel.create(
-          :game => @game.ID,
-          :action => 0,
-          :player => player,
-          :subject => player
+        game: @game.ID,
+        action: 0,
+        player: player,
+        subject: player
       )
       puts action.to_s
       action.save
     end
   end
 
-  def db_stop player
+  def db_stop(player)
     unless @casual == 1
       action = UnoActionModel.create(
-          :game => @game.ID,
-          :action => 2,
-          :player => player,
-          :subject => player
+        game: @game.ID,
+        action: 2,
+        player: player,
+        subject: player
       )
       action.save
     end
   end
-
 end
 
 class IrcUnoGame < UnoGame
   attr_accessor :irc
   attr_accessor :plugin
 
-  def notify text
+  def notify(text)
     @irc.Channel('#kx').send text
   end
 
-  def notify_player p, text
+  def notify_player(p, text)
     @irc.User(p.nick).notice text
   end
 
   def clean_up_end_game
-    unless @casual
-      @plugin.upload_db
-      @plugin.end_game
-    end
+    @plugin.upload_db unless @casual
+    @plugin.end_game
   end
-
 end
-=begin
-g = UnoGame.new
-p1 = UnoPlayer.new('a')
-p2 = UnoPlayer.new('b')
-g.add_player(p1)
-g.add_player(p2)
-g.start_game
-puts g.inspect
-puts '---'
-g.players.each {|p|
-  puts "#{p}'s cards: #{p.hand}"
-}
-g.player_card_play(p1,p1.hand[0])
-=end
+# g = UnoGame.new
+# p1 = UnoPlayer.new('a')
+# p2 = UnoPlayer.new('b')
+# g.add_player(p1)
+# g.add_player(p2)
+# g.start_game
+# puts g.inspect
+# puts '---'
+# g.players.each {|p|
+#   puts "#{p}'s cards: #{p.hand}"
+# }
+# g.player_card_play(p1,p1.hand[0])

@@ -3,7 +3,6 @@ require 'uri'
 require 'net/ftp'
 require './config.rb'
 
-
 module Cinch
   FTP_LOGIN = CONFIG['ftp_login']
   FTP_PASSWORD = CONFIG['ftp_password']
@@ -16,7 +15,7 @@ module Cinch
   class Bot
     def upload_to_dropbox file, path = '', filename=file.split('/')[-1]
       #self.config.shared[:database]
-      return unless CONFIG['dropbox_upload']
+      return unless CONFIG['dropbox_upload'] == true
       path += '\\' unless path == '' || path[-1] == '\\'
       FileUtils.cp file, DROPBOX_PATH + path + filename
     end
@@ -30,7 +29,7 @@ module Cinch
       ftp.putbinaryfile(sourcefile, filename)
       ftp.close
 
-      return (FTP_RESULT_URL + path + '/' + filename).gsub('//', '/')
+      return FTP_RESULT_URL + (path + '/' + filename).gsub(%r{ ([a-z0-9]//) }, '\1/')
     rescue StandardError => err
       puts "error:"
       puts err.message

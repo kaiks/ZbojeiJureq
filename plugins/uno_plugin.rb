@@ -266,6 +266,6 @@ class UnoPlugin
   def upload_db
     #todo: ftp
     @bot.upload_to_dropbox './uno.db'
+    @bot.send_to_ftp('./uno.db')
   end
-
 end

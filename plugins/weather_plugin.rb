@@ -1,6 +1,4 @@
 # encoding: utf-8
-
-require 'wunderground'
 require './config.rb'
 
 class WeatherUser < Sequel::Model(DB[:weather])
@@ -11,29 +9,22 @@ class WeatherPlugin
   include Cinch::Plugin
 
   self.prefix = '.'
+  OPTIONS = { units: "metric", APPID: CONFIG['openweathermap_api_key'] }.freeze
+  API_ENDPOINT_URL = "http://api.openweathermap.org/data/2.5/weather".freeze
 
   match /w register (.*)/i,     method: :register, group: :weathergroup
-  match /w (00000\.[0-9\.]+)/i, method: :weather_zmw, group: :weathergroup
   match /w help/i,              method: :help, group: :weathergroup
   match /w (.+)/i,              method: :weather, group: :weathergroup
   match /w\z/i,                 method: :registered_weather, group: :weathergroup
 
   def initialize(*args)
-    @w_api = Wunderground.new(CONFIG['wunderground_api_key'])
     super
   end
 
   def weather(m, city)
-    query_results = weather_query(city)
-    if query_results['response']['results']
-      m.reply parse_weather_results query_results['response']
-    else
-      m.reply parse_weather_simple query_results
-    end
-  end
-
-  def weather_zmw(m, location_code)
-    weather(m, "zmw:#{location_code}")
+    weather_string = weather_for(city)
+    return unless weather_string.length > 0
+    m.reply weather_string
   end
 
   def register(m, location)
@@ -45,36 +36,48 @@ class WeatherPlugin
   end
 
   def registered_weather(m)
-    user_location = WeatherUser[m.user.nick]
+    user_location = WeatherUser[m.user.nick]&.weather_string
     if user_location.nil?
       m.reply "No location registered for #{m.user.nick}"
       return
     end
-    m.reply parse_weather_simple weather_query(user_location[:weather_string])
-  end
-
-  def weather_query(q)
-    query = @w_api.conditions_for(q).to_s
-    h = eval(query)
-  end
-
-  def parse_weather_simple(h)
-    location = h['current_observation']['display_location']['full'].to_s
-    conditions = h['current_observation']['weather'].to_s
-    temp = h['current_observation']['temp_c'].to_s
-    "#{h["current_observation"]["display_location"]["full"]}: #{conditions} and #{temp}°C"
-  end
-
-  def result_to_string(result_hash)
-    "#{result_hash['zmw']}: #{result_hash['city']}, #{result_hash['state']}, #{result_hash['country_name']}"
-  end
-
-  def parse_weather_results(h)
-    'Multiple locations. Use ".w zmw:[code]".
-' + 'Codes: ' + h['results'][0..3].map { |r| result_to_string(r) }.join('   ---   ')
+    m.reply weather_for(user_location)
   end
 
   def help(m)
     m.channel.send '.w [city] to get weather for a city. .w register [city] to save your city'
+  end
+
+  private
+
+  def weather_for(location)
+    query_hash = weather_query(location)
+    parse_weather_results(query_hash)
+  end
+
+  def api_url_for(location)
+    query_params = OPTIONS.merge(q: location)
+    encoded_params = URI.encode_www_form(query_params)
+    API_ENDPOINT_URL + "?" + encoded_params
+  end
+
+  def weather_query(location)
+    raw_data = open(api_url_for(location)).read
+    JSON.parse(raw_data)
+  end
+
+  def parse_weather_results(weather_hash)
+    city             = weather_hash["name"]
+    country          = weather_hash.dig("sys", "country")
+    text_description = weather_hash["weather"]&.first["description"].to_s
+    temperature      = weather_hash.dig("main", "temp")
+    wind             = weather_hash.dig("wind", "speed")
+    
+    output_string = "#{city}, #{country}: "
+    output_string << text_description
+    output_string << ", #{temperature}°C" unless temperature.nil?
+    output_string << " and #{wind}m/s wind speed" unless wind.nil?
+
+    output_string
   end
 end

@@ -12,7 +12,6 @@ gem 'cinch'
 
 #Plugins:
 gem 'cinch-identify'
-gem 'wunderground'
 gem 'dentaku'
 gem 'money'
 #gem 'google_currency'

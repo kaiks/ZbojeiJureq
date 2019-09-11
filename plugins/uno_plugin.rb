@@ -211,9 +211,9 @@ class UnoPlugin
     #UNODB[:uno].where('games > 2').select_append('ROUND(CAST(total_score as FLOAT)/CAST(games AS FLOAT,2)').order(Sequel.desc(5)).limit(n).each { |row|
     UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE games >= 10 ORDER BY 5 DESC LIMIT ?', n].each { |row|
       counter += 1
-      values = row.values
+      values = row.values.map { |v| v.is_a?(BigDecimal) ? v.to_s("F") : v.to_s }
       if values[0].to_s.length > 0
-        m.reply "#{counter}. #{values[0].to_s.ljust(19)} #{values[1].to_s.ljust(7)} #{values[2].to_s.ljust(6)} #{values[4].to_s.ljust(8)} #{values[3].to_s.ljust(5)} #{(values[3].to_f*100.0/values[2].to_f).round(2).to_s.ljust(5, "0")}%"
+        m.reply "#{counter}. #{values[0].ljust(19)} #{values[1].ljust(7)} #{values[2].ljust(6)} #{values[4].ljust(8)} #{values[3].ljust(5)} #{(values[3].to_f*100.0/values[2].to_f).round(2).to_s.ljust(5, "0")}%"
       end
     }
   end

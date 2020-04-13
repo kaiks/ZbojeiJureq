@@ -43,7 +43,7 @@ class OilPlugin
 
     [
       "Crude oil price:", recent_data["last"],
-      "(#{percentage_change}%)",
+      "(#{percentage_change.round(2)}%)",
       "-",
       "daily low:", recent_data["low"],
       "-",

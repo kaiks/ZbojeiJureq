@@ -34,16 +34,15 @@ class OilPlugin
   end
 
   def oil_report(oil_hash)
-    delay = oil_hash["quoteDelay"]
-
     recent_data = oil_hash["quotes"]&.first
     return "Failed to fetch oil data" unless recent_data
 
-    percentage_change = 100.0 * recent_data["change"].to_f / recent_data["last"].to_f
+    delay = oil_hash["quoteDelay"]
+    change = change_text(recent_data["change"], recent_data["last"])
 
     [
       "Crude oil price:", recent_data["last"],
-      "(#{percentage_change.round(2)}%)",
+      "(#{change})",
       "-",
       "daily low:", recent_data["low"],
       "-",
@@ -51,5 +50,25 @@ class OilPlugin
       "-",
       "(delayed by: #{delay})"
     ].join(" ")
+  end
+
+  def change_text(change, last)
+    percentage_change = (100.0 * change.to_f / last.to_f).round(2)
+    percentage_text = ""
+    percentage_text << "+" if percentage_change.positive?
+    percentage_text << percentage_change.to_s
+    percentage_text << "%"
+
+    Text.color(percentage_text, change_color(percentage_change))
+  end
+
+  def change_color(value)
+    if value.positive?
+      Text::GREEN
+    elsif value.negative?
+      Text::RED
+    else
+      Text::BLACK
+    end
   end
 end

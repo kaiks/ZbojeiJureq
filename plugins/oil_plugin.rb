@@ -40,7 +40,7 @@ class OilPlugin
     return "Failed to fetch oil data" unless recent_data
 
     [
-      "Crude oil price:", recent_data["quotes"],
+      "Crude oil price:", recent_data["last"],
       "(#{recent_data["change"]})",
       "-",
       "daily low:", recent_data["low"],

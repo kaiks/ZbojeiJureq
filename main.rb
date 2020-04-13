@@ -35,7 +35,7 @@ $bot = Cinch::Bot.new do
                          TemplatePlugin, OwnPlugin, WeatherPlugin, TalkPlugin, UnoPlugin,
                          ObsoletePlugin, LoggerPlugin, ProtectPlugin, ObliczPlugin,
                          BtcPlugin, CurrencyPlugin, AntispamPlugin, WolframPlugin,
-                         CorePlugin,
+                         CorePlugin, OilPlugin,
                          Cinch::Plugins::PluginManagement, Cinch::Plugins::Identify]
   end
 

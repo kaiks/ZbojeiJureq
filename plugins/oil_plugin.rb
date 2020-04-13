@@ -43,9 +43,9 @@ class OilPlugin
       "Crude oil price:", recent_data["quotes"],
       "(#{recent_data["change"]})",
       "-",
-      "daily low:", price_data["low"],
+      "daily low:", recent_data["low"],
       "-",
-      "daily high:", price_data["high"],
+      "daily high:", recent_data["high"],
       "-",
       "(delayed by: #{delay})"
     ].join(" ")

@@ -39,9 +39,11 @@ class OilPlugin
     recent_data = oil_hash["quotes"]&.first
     return "Failed to fetch oil data" unless recent_data
 
+    percentage_change = 100.0 * recent_data["change"] / recent_data["last"]
+
     [
       "Crude oil price:", recent_data["last"],
-      "(#{recent_data["change"]})",
+      "(#{percentage_change}%)",
       "-",
       "daily low:", recent_data["low"],
       "-",

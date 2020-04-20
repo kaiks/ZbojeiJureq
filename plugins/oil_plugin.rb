@@ -38,7 +38,7 @@ class OilPlugin
     return "Failed to fetch oil data" unless recent_data
 
     delay = oil_hash["quoteDelay"]
-    change = change_text(recent_data["change"], recent_data["last"])
+    change = change_text(recent_data["change"], recent_data["open"])
 
     [
       "Crude oil price:", recent_data["last"],
@@ -52,8 +52,8 @@ class OilPlugin
     ].join(" ")
   end
 
-  def change_text(change, last)
-    percentage_change = (100.0 * change.to_f / last.to_f).round(2)
+  def change_text(change, open)
+    percentage_change = (100.0 * change.to_f / open.to_f).round(2)
     percentage_text = ""
     percentage_text << "+" if percentage_change.positive?
     percentage_text << percentage_change.to_s

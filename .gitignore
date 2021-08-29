@@ -127,4 +127,8 @@ plugins/en_dict.txt
 plugins/uno_plugin.rb.bak
 talk.db
 uno.db
+db/
+logs/
 #kx.log
+
+.history/

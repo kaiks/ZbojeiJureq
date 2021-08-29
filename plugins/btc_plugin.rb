@@ -80,7 +80,7 @@ class BtcPlugin
   end
 
   def update_cryptocompare_coin_list
-    api_response = open('https://www.cryptocompare.com/api/data/coinlist/').read
+    api_response = URI.open('https://www.cryptocompare.com/api/data/coinlist/').read
     @coin_list = JSON.parse(api_response)['Data'].keys
   end
 

@@ -4,7 +4,7 @@ def sqlite_load(filename)
                   else
                     'sqlite://'
                   end
-  Sequel.connect(driver_prefix + filename)
+  Sequel.sqlite("db/" + filename)
 end
 
 DB = sqlite_load('ZbojeiJureq.db')

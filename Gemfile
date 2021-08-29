@@ -2,7 +2,15 @@ source 'https://rubygems.org'
 if RUBY_PLATFORM == 'java'
     gem 'jdbc-sqlite3'
   else
-    gem 'sqlite3'
+    if RUBY_PLATFORM =~ /mingw/i
+      # you might have to do this upfront
+      # ridk exec pacman -Syu (repeatedly, until there's nothing left to install)
+      # ridk exec pacman -S mingw-w64-x86_64-dlfcn
+      # ridk exec pacman -S mingw-w64-x86_64-clang
+      gem "sqlite3"
+    else
+      gem 'sqlite3'
+    end
 end
 
 gem 'sequel'

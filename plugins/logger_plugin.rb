@@ -24,12 +24,14 @@ class LoggerPlugin
 
   match /^.log old (.*)/,         method: :find_old, use_prefix: false
 
+  LOG_FILENAME = "#kx.log"
+
   def initialize(*args)
     super
     @short_format       = "%Y-%m-%d"
     @msg_format         = "%H:%M:%S"
-    @filename           = "#kx.log"
-    @logfile            = File.open(@filename,"a+")
+    @filename           = LOG_FILENAME
+    @logfile            = File.open("logs/#{@filename}","a+")
     #@logfile_ram_cache  = File.open(@filename, 'r')
     @midnight_message   =  "#{@short_format}"
     @last_time_check    = Time.now

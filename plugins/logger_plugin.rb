@@ -104,6 +104,28 @@ class LoggerPlugin
     results = []
     pattern = m.message[9..400]
     timestamp = ''
+
+    results = `tools/sift '#{pattern}' logs/#{LOG_FILENAME}`
+    puts results
+    results.split("\n")[0..3].each { |result| m.reply result }
+
+    result_digest = Digest::SHA1.hexdigest(results)
+    filename = result_digest[0..4] + result_digest[-5..-1] + '.txt'
+    filepath = 'tmp_files/' + filename
+    if File.exist?(filepath)
+      m.reply "moar: #{CONFIG['ftp_result_url'] + 'logs/' + filename}"
+    else
+      tmp_file = File.write('tmp_files/' + filename, results)
+      result = @bot.send_to_ftp('tmp_files/' + filename, '/logs')
+      m.reply "moar: #{result}"
+    end
+  end
+
+
+  def find_old_deprecated(m)
+    results = []
+    pattern = m.message[9..400]
+    timestamp = ''
     puts pattern
 
     get_lock

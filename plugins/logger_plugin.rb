@@ -106,7 +106,7 @@ class LoggerPlugin
     timestamp = ''
 
     results = `tools/sift '#{pattern}' logs/#{LOG_FILENAME}`
-    puts results
+    # puts results
     results.split("\n")[0..3].each { |result| m.reply result }
 
     result_digest = Digest::SHA1.hexdigest(results)

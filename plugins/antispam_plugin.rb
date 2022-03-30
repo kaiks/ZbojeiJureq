@@ -1,4 +1,3 @@
-require 'ruby-fann'
 
 class AntispamPlugin
   MSG_CHANNEL = '#kx'
@@ -6,17 +5,17 @@ class AntispamPlugin
 
   include Cinch::Plugin
 
-  self.prefix = '.'
+  # self.prefix = '.'
 
-  match /(.*)/,  method: :verify, use_prefix: false
+  # match /(.*)/,  method: :verify, use_prefix: false
 
   def initialize(*args)
-    load_ai
+    # load_ai
     super
   end
 
   def load_ai
-    @ai = RubyFann::Standard.new(filename: "./plugins/antispam_plugin/spamdetector.net")
+    # @ai = RubyFann::Standard.new(filename: "./plugins/antispam_plugin/spamdetector.net")
   end
 
   def translate_input_element(string)

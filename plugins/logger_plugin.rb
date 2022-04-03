@@ -93,6 +93,7 @@ class LoggerPlugin
   end
 
   def write_to_log(text)
+    text.concat("\n") unless text.end_with?("\n")
     semaphore.synchronize do
       File.write(@filepath, text, mode: 'a')
     end

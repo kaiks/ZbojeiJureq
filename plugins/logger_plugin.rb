@@ -14,6 +14,25 @@ require 'digest/sha1'
 # A logging plugin for Cinch.
 # Copyright © 2012 Marvin Gülker
 
+class LogFragment
+  attr_reader :full_content
+  def initialize(full_content)
+    @full_content = full_content
+  end
+
+  def main_fragment
+    array_middle_element(@full_content.split("\n"))
+  end
+
+  def array_middle_element(array)
+    array[array.length / 2]
+  end
+
+  def to_s
+    main_fragment
+  end
+end
+
 class LoggerPlugin
   include Cinch::Plugin
 
@@ -102,18 +121,19 @@ class LoggerPlugin
   def find_old(m)
     pattern = m.message[9..400]
 
-    results = find_results_in_log(pattern) || []
-    results[0..3].each { |result| m.reply result }
+    results = find_results_in_log(pattern, 2) || []
+    fragments = results.split(/^--$/).map { |result| LogFragment.new(result) }
+    fragments[0..3].each { |fragment| m.reply fragment }
 
     remaining_results_response(results, m) if results.length > 4
   end
 
-  def find_results_in_log(pattern)
-    `tools/sift '#{pattern}' logs/#{LOG_FILENAME} --not-preceded-by=".log old"`.split("\n")
+  def find_results_in_log(pattern, context = 0)
+    `tools/sift '#{pattern}' logs/#{LOG_FILENAME} --not-preceded-by=".log old" --context=#{context}`
   end
 
   def remaining_results_response(results, m)
-    result_digest = Digest::SHA1.hexdigest(results.join)
+    result_digest = Digest::SHA1.hexdigest(results)
     filename = "#{result_digest[0..4]}#{result_digest[-5..-1]}.txt"
     local_filepath = "tmp_files/#{filename}"
 

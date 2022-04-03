@@ -51,8 +51,7 @@ class LoggerPlugin
     @short_format       = '%Y-%m-%d'
     @msg_format         = '%H:%M:%S'
     @filename           = LOG_FILENAME
-    @logfile            = File.open("logs/#{@filename}", 'a+')
-    # @logfile_ram_cache  = File.open(@filename, 'r')
+    @filepath           = "logs/#{@filename}"
     @midnight_message = @short_format.to_s
     @last_time_check    = Time.now
   end
@@ -72,16 +71,7 @@ class LoggerPlugin
   def check_midnight
     time = Time.now
     if time.day != @last_time_check.day
-      get_lock
-      begin
-        @logfile.puts(time.strftime(@midnight_message))
-        @logfile.close
-      rescue StandardError
-        puts 'Something went wrong with writing to log file'
-        release_lock
-      end
-      @logfile = File.open(@filename, 'a+')
-      release_lock
+      write_to_log(time.strftime(@midnight_message))
     end
     @last_time_check = time
   end
@@ -90,32 +80,26 @@ class LoggerPlugin
   ### Logs a message!
   ###
   def log_public_message(msg)
+    text = message_to_log_line(msg)
+    write_to_log(text)
+  end
+
+  def message_to_log_line(msg)
     time = Time.now.strftime(@msg_format)
-    get_lock
-    begin
-      @logfile.puts(format('[%{time}] <%{nick}> %{msg}',
-                           time: time,
-                           nick: msg.user.name,
-                           msg: msg.message))
-    rescue StandardError
-      File.close(@logfile)
-      @logfile = nil
-      @logfile = File.open(@filename, 'a+')
-      @logfile.puts(format('[%{time}] <%{nick}> %{msg}',
-                           time: time,
-                           nick: msg.user.name,
-                           msg: msg.message))
+    format('[%{time}] <%{nick}> %{msg}',
+      time: time,
+      nick: msg.user.name,
+      msg: msg.message)
+  end
+
+  def write_to_log(text)
+    semaphore.synchronize do
+      File.write(@filepath, text, mode: 'a')
     end
-    release_lock
   end
 
-  def get_lock
-    sleep(0.5) while @logfile_lock == true
-    @logfile_lock = true
-  end
-
-  def release_lock
-    @logfile_lock = false
+  def semaphore
+    @semaphore ||= Mutex.new
   end
 
   def find_old(m)
@@ -161,41 +145,5 @@ class LoggerPlugin
 
   def log_file_url(filename)
     "#{CONFIG['ftp_result_url']}logs/#{filename}"
-  end
-
-  def find_old_deprecated(m)
-    results = []
-    pattern = m.message[9..400]
-    timestamp = ''
-    puts pattern
-
-    get_lock
-    @logfile.rewind
-    @logfile.each_line do |line|
-      ls = line.split
-      if ls[0] == 'Session' && (ls[1] == 'Start:' || ls[1] == 'Time:')
-        timestamp = "#{ls[6]} #{ls[3..4]}"
-      elsif ls[0] =~ /^[0-9]{4}-[0-1][0-9]-[0-3][0-9]$/
-        timestamp = "#{ls[0]} "
-      elsif line.include?(pattern) && !ls[0].nil?
-        results += [timestamp + line] unless ls[0].include?('ZbojeiJureq') || line.include?('> .log old')
-      end
-    end
-    release_lock
-    m.reply results[0] if results[0]
-    return if results.length <= 1
-
-    results = results.join
-
-    result_digest = Digest::SHA1.hexdigest(results)
-    filename = "#{result_digest[0..4]}#{result_digest[-5..-1]}.txt"
-    filepath = "tmp_files/#{filename}"
-    if File.exist?(filepath)
-      m.reply "moar: #{"#{CONFIG['ftp_result_url']}logs/#{filename}"}"
-    else
-      tmp_file = File.write("tmp_files/#{filename}", results)
-      result = @bot.send_to_ftp("tmp_files/#{filename}", '/logs')
-      m.reply "moar: #{result}"
-    end
   end
 end

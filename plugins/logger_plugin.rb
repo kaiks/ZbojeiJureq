@@ -130,15 +130,19 @@ class LoggerPlugin
       m.reply "moar: #{log_file_url(filename)}"
     else
       ensure_directory_exists(RELATIVE_RETRIEVED_LOG_DIR)
-      tmp_file = File.write("#{RELATIVE_RETRIEVED_LOG_DIR}/#{filename}", results)
+      file_path = "#{RELATIVE_RETRIEVED_LOG_DIR}/#{filename}"
+
+      File.open(file_path, "w") do |f|     
+        f.write(results)   
+      end
+
       url = store_results_on_server("#{Dir.pwd}/#{RELATIVE_RETRIEVED_LOG_DIR}/", filename)
       m.reply "moar: #{url}"
     end
   end
 
   def ensure_directory_exists(directory)
-    dirname = File.dirname(directory)
-    FileUtils.mkdir_p(dirname) unless File.directory?(dirname)
+    FileUtils.mkdir_p(directory) unless File.directory?(directory)
   end
 
   # returns URL to file

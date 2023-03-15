@@ -109,7 +109,7 @@ class LoggerPlugin
     pattern = m.message[9..400]
 
     results = find_results_in_log(pattern, 2) || []
-    return "No results found for #{pattern}" if results.empty?
+    return m.reply "No results found for #{pattern}" if results.empty?
 
     fragments = results.split(/^--$/).map { |result| LogFragment.new(result) }
     fragments[0..3].each { |fragment| m.reply fragment }

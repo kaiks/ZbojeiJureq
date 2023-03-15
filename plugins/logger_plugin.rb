@@ -5,6 +5,7 @@
 
 require 'cinch'
 require 'digest/sha1'
+require 'fileutils'
 
 # based on Logging Plugin:
 # == Logging Plugin Authors
@@ -43,7 +44,8 @@ class LoggerPlugin
 
   match(/^.log old (.*)/, method: :find_old, use_prefix: false)
 
-  LOG_FILENAME = '#kx.log'
+  LOG_FILENAME = '#kx.log'.freeze
+  RELATIVE_RETRIEVED_LOG_DIR = "tmp_files".freeze
   USE_FTP = false
 
   def initialize(*args)
@@ -107,6 +109,8 @@ class LoggerPlugin
     pattern = m.message[9..400]
 
     results = find_results_in_log(pattern, 2) || []
+    return "No results found for #{pattern}" if results.empty?
+
     fragments = results.split(/^--$/).map { |result| LogFragment.new(result) }
     fragments[0..3].each { |fragment| m.reply fragment }
 
@@ -120,15 +124,21 @@ class LoggerPlugin
   def remaining_results_response(results, m)
     result_digest = Digest::SHA1.hexdigest(results)
     filename = "#{result_digest[0..4]}#{result_digest[-5..-1]}.txt"
-    local_filepath = "tmp_files/#{filename}"
+    local_filepath = "#{RELATIVE_RETRIEVED_LOG_DIR}/#{filename}"
 
     if File.exist?(local_filepath)
       m.reply "moar: #{log_file_url(filename)}"
     else
-      tmp_file = File.write("tmp_files/#{filename}", results)
-      url = store_results_on_server("#{Dir.pwd}/tmp_files/", filename)
+      ensure_directory_exists(RELATIVE_RETRIEVED_LOG_DIR)
+      tmp_file = File.write("#{RELATIVE_RETRIEVED_LOG_DIR}/#{filename}", results)
+      url = store_results_on_server("#{Dir.pwd}/#{RELATIVE_RETRIEVED_LOG_DIR}/", filename)
       m.reply "moar: #{url}"
     end
+  end
+
+  def ensure_directory_exists(directory)
+    dirname = File.dirname(directory)
+    FileUtils.mkdir_p(dirname) unless File.directory?(dirname)
   end
 
   # returns URL to file

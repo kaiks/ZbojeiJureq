@@ -57,7 +57,7 @@ class AzPlugin
   end
 
   def help(m)
-    m.reply 'az help available at http://kaiks.eu/help/az.html'
+    m.reply 'az help available at https://zboje.kaiks.eu/docs/index.html#az-plugin'
   end
 
   def top(m, n = 5)

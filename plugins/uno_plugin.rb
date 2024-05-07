@@ -224,7 +224,7 @@ class UnoPlugin
   end
 
   def help(m)
-    m.reply '.uno -> .deal / .uno stop / .uno top / ... uno help available at http://kaiks.eu/help/uno.html'
+    m.reply '.uno -> .deal / .uno stop / .uno top / ... uno help available at https://zboje.kaiks.eu/docs/index.html#uno-plugin'
   end
 
   def winrate(games, wins)

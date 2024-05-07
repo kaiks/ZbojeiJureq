@@ -17,6 +17,6 @@ WORKDIR $APP_HOME
 # Copy over our application code
 ADD . .
 RUN chmod +x tools/sift
-RUN gem install bundler
+RUN gem install bundler -v 2.4.22
 RUN bundle install
 CMD ruby main.rb

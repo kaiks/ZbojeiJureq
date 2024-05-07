@@ -11,6 +11,8 @@ GEM
       concurrent-ruby
     domain_name (0.5.20190701)
       unf (>= 0.0.5, < 1.0.0)
+    ffi (1.15.3)
+    ffi (1.15.3-java)
     ffi (1.15.3-x64-mingw32)
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
@@ -39,12 +41,14 @@ GEM
     sqlite3 (1.4.2)
     unf (0.1.4)
       unf_ext
+    unf (0.1.4-java)
+    unf_ext (0.0.7.7)
     unf_ext (0.0.7.7-x64-mingw32)
 
 PLATFORMS
-  x64-mingw32
-  ruby
   java
+  ruby
+  x64-mingw32
 
 DEPENDENCIES
   cinch

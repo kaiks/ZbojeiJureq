@@ -1,19 +1,133 @@
 <!DOCTYPE html>
-<html>
-<title>ZbojeiJureq help</title>
-
-<xmp theme="united" style="display:none;">
-# ZbojeiJureq help
-
-
-## <a href="timer.html">timer</a>
-
-## <a href="note.html">note</a>
-
-## <a href="uno.html">uno</a>
-
-## <a href="az.html">az</a>
-</xmp>
-
-<script src="http://strapdownjs.com/v/0.2/strapdown.js"></script>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>docs</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#az-plugin">az plugin</a>
+<ul>
+<li><a href="#commands">Commands</a>
+<ul>
+<li><a href="#az">.az</a></li>
+<li><a href="#az-ez">.az ez</a></li>
+<li><a href="#az-top-n">.az top [n]</a></li>
+<li><a href="#az-stop">.az stop</a></li>
+<li><a href="#az-hint">.az hint</a></li>
+</ul></li>
+<li><a href="#scores">Scores</a></li>
+</ul></li>
+<li><a href="#note-plugin">Note plugin</a>
+<ul>
+<li><a href="#commands-1">Commands</a>
+<ul>
+<li><a href="#note-nick-message">.note nick message</a></li>
+<li><a href="#mynotes">.mynotes</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#timer-plugin">Timer plugin</a>
+<ul>
+<li><a href="#commands-2">Commands</a>
+<ul>
+<li><a href="#timer-xx.xx-dhms-message">.timer [xx.xx] [d|h|m|s] message</a></li>
+<li><a href="#timer-hhmm-message">.timer [hh:mm] message</a></li>
+<li><a href="#timer-dd.mm.yyyy-hhmm-message">.timer [dd.mm.yyyy] [hh:mm] message</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#uno-plugin">Uno plugin</a>
+<ul>
+<li><a href="#commands-3">Commands</a>
+<ul>
+<li><a href="#uno">.uno</a></li>
+<li><a href="#uno-casual">.uno casual</a></li>
+<li><a href="#uno-stop">.uno stop</a></li>
+<li><a href="#uno-top-n">.uno top [n]</a></li>
+<li><a href="#deal">.deal</a></li>
+</ul></li>
+<li><a href="#in-game-commands">In-game commands</a>
+<ul>
+<li><a href="#ca">ca</a></li>
+<li><a href="#ca-1">ca</a></li>
+<li><a href="#od">od</a></li>
+<li><a href="#pe">pe</a></li>
+<li><a href="#pa">pa</a></li>
+<li><a href="#pl-card">pl [card]</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="az-plugin">az plugin</h1>
+<p>az plugin manages the az irc game. A word from a dictionary is randomly chosen, and players are supposed to guess the word.</p>
+<h2 id="commands">Commands</h2>
+<h3 id="az">.az</h3>
+<p>starts a new az game</p>
+<h3 id="az-ez">.az ez</h3>
+<p>starts a new easy az game with the word drawn from limited vocabulary</p>
+<h3 id="az-top-n">.az top [n]</h3>
+<p>shows the top n player stats. n is optional</p>
+<h3 id="az-stop">.az stop</h3>
+<p>ends the game</p>
+<h3 id="az-hint">.az hint</h3>
+<p>presents a hint. hints are available after 10 tries</p>
+<h2 id="scores">Scores</h2>
+<p>The winning score for a non-ez game is calculated as follows: <code>(100*exp(-(n-1)**2/50**2)).ceil + p</code> where: * n is the number of total tries within the game * p is the number of players that guessed any word during the game</p>
+<p>ez game scores are divided by 2</p>
+<h1 id="note-plugin">Note plugin</h1>
+<p>Note plugin lets you leave messages for others for when they come back.</p>
+<h2 id="commands-1">Commands</h2>
+<h3 id="note-nick-message">.note nick message</h3>
+<p>leaves a <em>message</em> for <em>nick</em></p>
+<h3 id="mynotes">.mynotes</h3>
+<p>displays the notes that you have left for other people</p>
+<h1 id="timer-plugin">Timer plugin</h1>
+<p>Timer plugin lets you send messages into the future.</p>
+<h2 id="commands-2">Commands</h2>
+<h3 id="timer-xx.xx-dhms-message">.timer [xx.xx] [d|h|m|s] message</h3>
+<p>leaves a message that will be sent in xx.xx days/hours/minutes/seconds ######Examples: - <em>.timer 15.50 m hello</em> will send the message <em>hello</em> after 15minutes and 30 seconds - <em>.timer 20.50 d hello</em> will send the message <em>hello</em> after 20days and 12 hours</p>
+<h3 id="timer-hhmm-message">.timer [hh:mm] message</h3>
+<p>leaves a message that will be sent at hh:mm, where hh-hours, mm-minutes Examples: - <em>.timer 15:50 hello</em> will send the message <em>hello</em> at 15:50 - <em>.timer 15:50 hello</em> <strong>when it’s 16:30</strong> will send the message <em>hello</em> at 15:50 the following day.</p>
+<h3 id="timer-dd.mm.yyyy-hhmm-message">.timer [dd.mm.yyyy] [hh:mm] message</h3>
+<p>leaves a message on the date dd.mm.yyyy at hh:mm. Examples: - <em>.timer 30.12.2020 23:20 hello</em> will send the message <em>hello</em> at 23:20 on 30.12.2020</p>
+<h1 id="uno-plugin">Uno plugin</h1>
+<p>Uno plugin manages the Uno irc game.</p>
+<h2 id="commands-3">Commands</h2>
+<h3 id="uno">.uno</h3>
+<p>creates a new uno game</p>
+<h3 id="uno-casual">.uno casual</h3>
+<p>starts a new unranked game</p>
+<h3 id="uno-stop">.uno stop</h3>
+<p>closes an existing uno game</p>
+<h3 id="uno-top-n">.uno top [n]</h3>
+<p>shows the top n player stats. n is optional</p>
+<h3 id="deal">.deal</h3>
+<p>deals cards to players and starts the game</p>
+<h2 id="in-game-commands">In-game commands</h2>
+<h3 id="ca">ca</h3>
+<p>shows you your cards</p>
+<h3 id="ca-1">ca</h3>
+<p>shows you your cards</p>
+<h3 id="od">od</h3>
+<p>presents current player order</p>
+<h3 id="pe">pe</h3>
+<p>picks a card from the card pile</p>
+<h3 id="pa">pa</h3>
+<p>passes the turn</p>
+<h3 id="pl-card">pl [card]</h3>
+<p>plays a card from your hand, e.g. pl y6</p>
+<p>cards can be wild or normal, where normal cards are formatted as [color][figure], where color = [r,g,b,y] figure = [0,1,2,3,4,5,6,7,8,9,R,S,+2]</p>
+<p>wild cards are formatted as [figure][color], where figure = [wd4,w]</p>
+</body>
 </html>

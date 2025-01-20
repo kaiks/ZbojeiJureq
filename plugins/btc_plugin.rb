@@ -31,8 +31,8 @@ class BtcPlugin
 
   def btc_price_update?(current)
     current_rounded = round_to_500(current)
-    (current_rounded > @btc_price_checkpoint && current >= (@btc_price_checkpoint + 500)) ||
-      (current_rounded < @btc_price_checkpoint && current <= (@btc_price_checkpoint - 500))
+    (current_rounded > @btc_price_checkpoint && current >= (@btc_price_checkpoint * 1.05)) ||
+      (current_rounded < @btc_price_checkpoint && current <= (@btc_price_checkpoint * 0.95))
   end
 
   def btc_price_check

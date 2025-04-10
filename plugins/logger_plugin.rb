@@ -118,7 +118,7 @@ class LoggerPlugin
   end
 
   def find_results_in_log(pattern, context = 0)
-    `rg -P '(?<!\.log old )#{pattern}' logs/#{LOG_FILENAME} --context #{context} --no-context-separator`
+    `rg -P '(?<!\.log old )#{pattern}' logs/#{LOG_FILENAME} --context #{context}`
   end
 
   def remaining_results_response(results, m)

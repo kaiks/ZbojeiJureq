@@ -1,5 +1,5 @@
 # see https://github.com/evilmartians/fullstaq-ruby-docker
-ARG RUBY_VERSION=2.6.9-jemalloc-bullseye
+ARG RUBY_VERSION=3.4.4-jemalloc-bookworm
 
 FROM quay.io/evl.ms/fullstaq-ruby:${RUBY_VERSION}-slim
 
@@ -8,7 +8,8 @@ RUN apt-get update -q \
      curl \
      nano \
      build-essential \
-     libsqlite3-dev
+     libsqlite3-dev \
+     git
 
 ENV APP_HOME /ZbojeiJureq
 RUN mkdir $APP_HOME

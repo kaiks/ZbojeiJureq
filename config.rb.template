@@ -30,6 +30,9 @@ CONFIG = {
 
     'wolframalpha_api_key'  => 'YOUR_API_KEY',
     
+    # BTC Plugin configuration (optional)
+    # 'btc_channel'           => '#kx',  # Channel for BTC price updates (default: #kx)
+    
     'use_rollbar'           => false,
     'rollbar_api_key'       => 'YOUR_API_KEY'
 }

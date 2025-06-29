@@ -30,6 +30,13 @@ $bot = Cinch::Bot.new do
       type:     :quakenet
     }
 
+    # Optional BTC plugin configuration
+    if CONFIG['btc_channel']
+      c.plugins.options[BtcPlugin] = {
+        btc_channel: CONFIG['btc_channel']
+      }
+    end
+
 
     c.plugins.plugins = [EvaluatePlugin, TimerPlugin, AuthenticationPlugin, NotePlugin, AzPlugin,
                          TemplatePlugin, OwnPlugin, WeatherPlugin, TalkPlugin, UnoPlugin,

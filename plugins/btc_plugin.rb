@@ -1,13 +1,109 @@
-require 'open-uri'
+require 'uri'
 require 'json'
 require 'time'
+require 'net/http'
 
-#TODO: extract api from user interface
-
-class BtcPlugin
+# HTTP Client for cryptocurrency APIs
+class CryptoApiClient
   CRYPTOCOMPARE_DOMAIN = 'https://min-api.cryptocompare.com'.freeze
   BCINFO_DOMAIN = 'https://blockchain.info'.freeze
-  MSG_CHANNEL = '#kx'
+  DEFAULT_TIMEOUT = 10
+
+  class ApiError < StandardError; end
+
+  def initialize(timeout: DEFAULT_TIMEOUT)
+    @timeout = timeout
+    @cache = {}
+    @cache_ttl = 60 # 1 minute cache
+  end
+
+  def btc_price_in_usd
+    with_cache('btc_usd') do
+      response = fetch_json("#{BCINFO_DOMAIN}/tobtc?currency=USD&value=1")
+      1.0 / response.to_f
+    end
+  end
+
+  def get_coin_prices(coin, currencies = %w[USD PLN])
+    cache_key = "#{coin}_#{currencies.join('_')}"
+    with_cache(cache_key) do
+      curr_string = currencies.map(&:upcase).join(',')
+      fetch_json("#{CRYPTOCOMPARE_DOMAIN}/data/price?fsym=#{coin}&tsyms=#{curr_string}")
+    end
+  end
+
+  def coin_list
+    with_cache('coin_list', ttl: 3600) do # 1 hour cache for coin list
+      response = fetch_json('https://www.cryptocompare.com/api/data/coinlist/')
+      response['Data'].keys
+    end
+  end
+
+  private
+
+  def with_cache(key, ttl: @cache_ttl)
+    if @cache[key] && @cache[key][:expires_at] > Time.now
+      return @cache[key][:value]
+    end
+
+    value = yield
+    @cache[key] = { value: value, expires_at: Time.now + ttl }
+    value
+  end
+
+  def fetch_json(url)
+    uri = URI(url)
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https', 
+                               open_timeout: @timeout, read_timeout: @timeout) do |http|
+      http.get(uri.request_uri)
+    end
+
+    raise ApiError, "HTTP #{response.code}: #{response.message}" unless response.is_a?(Net::HTTPSuccess)
+    
+    JSON.parse(response.body)
+  rescue Net::OpenTimeout, Net::ReadTimeout => e
+    raise ApiError, "Request timeout: #{e.message}"
+  rescue JSON::ParserError => e
+    raise ApiError, "Invalid JSON response: #{e.message}"
+  rescue => e
+    raise ApiError, "Request failed: #{e.message}"
+  end
+end
+
+# Price monitoring and formatting logic
+class PriceMonitor
+  attr_reader :checkpoint
+
+  def initialize(rounding_factor: 500)
+    @rounding_factor = rounding_factor
+    @checkpoint = nil
+  end
+
+  def round_to_increment(price)
+    factor = @rounding_factor.to_f
+    ((price / factor).round * factor).to_f
+  end
+
+  def significant_change?(current_price)
+    return false unless @checkpoint
+    
+    current_rounded = round_to_increment(current_price)
+    (current_rounded > @checkpoint && current_price >= (@checkpoint + @rounding_factor)) ||
+      (current_rounded < @checkpoint && current_price <= (@checkpoint - @rounding_factor))
+  end
+
+  def update_checkpoint(price)
+    @checkpoint = round_to_increment(price)
+  end
+
+  def format_price_update(current_price, previous_checkpoint)
+    current_rounded = round_to_increment(current_price)
+    color = current_rounded > previous_checkpoint ? Text::GREEN : Text::RED
+    "BTC price update: #{Text.color(Text.bold(current_price), color)}, was #{previous_checkpoint}"
+  end
+end
+
+class BtcPlugin
   include Cinch::Plugin
 
   self.prefix = '.'
@@ -21,83 +117,93 @@ class BtcPlugin
   timer 600, method: :btc_price_check
 
   def initialize(*args)
-    update_cryptocompare_coin_list
     super
-  end
-
-  def round_to_500(price)
-    ((2.0*price).round(-3))/2.0
-  end
-
-  def btc_price_update?(current)
-    current_rounded = round_to_500(current)
-    (current_rounded > @btc_price_checkpoint && current >= (@btc_price_checkpoint * 1.05)) ||
-      (current_rounded < @btc_price_checkpoint && current <= (@btc_price_checkpoint * 0.95))
-  end
-
-  def btc_price_check
-    @btc_price_checkpoint ||= round_to_500(btc_price_in_usd)
-    current_price = btc_price_in_usd
-    current_rounded_price = round_to_500(current_price)
-    if btc_price_update?(current_price)
-      color = current_rounded_price > @btc_price_checkpoint ? Text::GREEN : Text::RED
-      update_msg = "BTC price update: #{Text.color(Text.bold(current_price), color)}, was #{@btc_price_checkpoint}"
-
-      Channel(MSG_CHANNEL).send(update_msg)
-      @btc_price_checkpoint = round_to_500(current_price)
-    end
-  end
-
-  def btc_price_in_usd
-    api_response = open("#{BCINFO_DOMAIN}/tobtc?currency=USD&value=1").read
-    1.0/api_response.to_f
+    @api_client = CryptoApiClient.new
+    @price_monitor = PriceMonitor.new
+    @msg_channel = config[:btc_channel] || '#kx'
+    
+    # Initialize coin list in background
+    Thread.new { safe_update_coin_list }
   end
 
   def btc(m)
-    api_response = open("#{BCINFO_DOMAIN}/tobtc?currency=USD&value=1").read
-    m.reply "#{btc_price_in_usd} USD"
-  end
-
-  def get_coin_cryptocompare(coin, currencies = %w[USD PLN])
-    curr_string = currencies.map(&:upcase).join(',')
-    open(
-      "#{CRYPTOCOMPARE_DOMAIN}/data/price?fsym=#{coin}&tsyms=#{curr_string}"
-    ).read
-  end
-
-  def cryptocompare_parse(api_response)
-    JSON.parse(api_response).map{|k,v| "#{k}: #{v}"}.join(', ')
+    price = @api_client.btc_price_in_usd
+    m.reply "#{price} USD"
+  rescue CryptoApiClient::ApiError => e
+    m.reply "Error fetching BTC price: #{e.message}"
   end
 
   def eth(m)
-    api_response = get_coin_cryptocompare('ETH')
-    m.reply cryptocompare_parse(api_response)
+    handle_crypto_command(m, 'ETH')
   end
 
   def bch(m)
-    api_response = get_coin_cryptocompare('BCH')
-    m.reply cryptocompare_parse(api_response)
-  end
-
-  def update_cryptocompare_coin_list
-    api_response = URI.open('https://www.cryptocompare.com/api/data/coinlist/').read
-    @coin_list = JSON.parse(api_response)['Data'].keys
+    handle_crypto_command(m, 'BCH')
   end
 
   def crypto(m, coin)
     coin = coin.upcase
-    if @coin_list.include?(coin)
-      api_response = get_coin_cryptocompare(coin)
-      m.reply cryptocompare_parse(api_response)
-    else
+    unless coin_valid?(coin)
       m.reply "Coin unknown (#{coin})."
+      return
     end
+    
+    handle_crypto_command(m, coin)
   end
 
   def update(m)
     return unless m.user.has_admin_access?
-    update_cryptocompare_coin_list
-    m.reply 'Cryptocurrency list updated.'
+    
+    if safe_update_coin_list
+      m.reply 'Cryptocurrency list updated.'
+    else
+      m.reply 'Failed to update cryptocurrency list.'
+    end
   end
 
+  def btc_price_check
+    current_price = @api_client.btc_price_in_usd
+    
+    # Initialize checkpoint on first run
+    unless @price_monitor.checkpoint
+      @price_monitor.update_checkpoint(current_price)
+      return
+    end
+    
+    if @price_monitor.significant_change?(current_price)
+      previous = @price_monitor.checkpoint
+      message = @price_monitor.format_price_update(current_price, previous)
+      Channel(@msg_channel).send(message)
+      @price_monitor.update_checkpoint(current_price)
+    end
+  rescue CryptoApiClient::ApiError => e
+    bot.loggers.error "BTC price check failed: #{e.message}"
+  end
+
+  private
+
+  def handle_crypto_command(m, coin)
+    prices = @api_client.get_coin_prices(coin)
+    formatted = format_prices(prices)
+    m.reply formatted
+  rescue CryptoApiClient::ApiError => e
+    m.reply "Error fetching #{coin} price: #{e.message}"
+  end
+
+  def format_prices(prices_hash)
+    prices_hash.map { |currency, price| "#{currency}: #{price}" }.join(', ')
+  end
+
+  def coin_valid?(coin)
+    @coin_list ||= []
+    @coin_list.include?(coin)
+  end
+
+  def safe_update_coin_list
+    @coin_list = @api_client.coin_list
+    true
+  rescue CryptoApiClient::ApiError => e
+    bot.loggers.error "Failed to update coin list: #{e.message}" if defined?(bot)
+    false
+  end
 end

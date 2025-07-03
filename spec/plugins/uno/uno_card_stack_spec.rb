@@ -64,10 +64,9 @@ RSpec.describe CardStack do
       expect(wilds).to all(have_attributes(color: :wild))
     end
     
-    it 'returns integer (not self for chaining)' do
+    it 'returns self for chaining' do
       new_stack = CardStack.new
-      # The fill method returns 4 from the times block, not self
-      expect(new_stack.fill).to eq(4)
+      expect(new_stack.fill).to eq(new_stack)
     end
   end
   
@@ -181,8 +180,7 @@ RSpec.describe CardStack do
     end
     
     it 'allows dealing initial hands' do
-      stack.fill
-      stack.shuffle!
+      stack.fill.shuffle!
       
       # Deal 7 cards to 4 players
       hands = []

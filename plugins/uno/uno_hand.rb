@@ -65,15 +65,15 @@ class Hand < Array
   end
 
   def select(&block)
-    Hand.new(super.select { block })
+    Hand.new(super(&block))
   end
 
   def reverse
-    Hand.new(super.reverse)
+    Hand.new(super)
   end
 
   def reverse!
-    super.reverse!
+    super
   end
 
   # Uno::COLORS[color]

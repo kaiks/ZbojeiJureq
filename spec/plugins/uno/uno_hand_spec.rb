@@ -213,12 +213,10 @@ RSpec.describe Hand do
       hand << [red5, blue3, green_skip]
     end
     
-    it 'returns Hand instance but does not reverse (bug)' do
+    it 'returns reversed Hand instance' do
       reversed = hand.reverse
       expect(reversed).to be_a(Hand)
-      # Bug: The reverse method doesn't actually reverse the order
-      # It returns the original order due to implementation issues
-      expect(reversed.to_a).to eq([red5, blue3, green_skip])
+      expect(reversed.to_a).to eq([green_skip, blue3, red5])
     end
     
     it 'does not modify original hand' do
@@ -233,10 +231,10 @@ RSpec.describe Hand do
       hand << [red5, blue3, green_skip]
     end
     
-    it 'has a bug with infinite recursion' do
-      # The implementation calls super.reverse! which causes infinite recursion
-      # This is a bug in the code, not the test
-      expect { hand.reverse! }.to raise_error(SystemStackError)
+    it 'reverses hand in place' do
+      hand.reverse!
+      expect(hand.first).to eq(green_skip)
+      expect(hand.last).to eq(red5)
     end
   end
   

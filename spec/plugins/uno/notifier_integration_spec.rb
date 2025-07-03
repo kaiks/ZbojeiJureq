@@ -13,9 +13,9 @@ class UnoGameWithoutThreadSafety
   attr_reader :players, :top_card, :game_state, :creator
   attr_reader :card_stack
   attr_reader :starting_stack, :first_player
-  attr_accessor :notifier
+  attr_accessor :notifier, :repository
   
-  def initialize(creator, casual = 0, notifier = nil)
+  def initialize(creator, casual = 0, notifier = nil, repository = nil)
     @players = []
     @stacked_cards = 0
     @card_stack = nil
@@ -31,6 +31,8 @@ class UnoGameWithoutThreadSafety
     @full_deck = CardStack.new
     @full_deck.fill
     @notifier = notifier || Uno::ConsoleNotifier.new
+    @repository = repository || Uno::NullRepository.new
+    @game_id = @repository.create_game(creator, Time.now.strftime('%F %T'))
   end
   
   def add_player(p)
@@ -86,7 +88,7 @@ end
 RSpec.describe "Notifier integration" do
   describe "UnoGame with NullNotifier" do
     let(:notifier) { Uno::NullNotifier.new }
-    let(:game) { UnoGameWithoutThreadSafety.new('TestCreator', 1, notifier) }
+    let(:game) { UnoGameWithoutThreadSafety.new('TestCreator', 1, notifier, Uno::NullRepository.new) }
     let(:alice) { UnoPlayer.new('Alice') }
     let(:bob) { UnoPlayer.new('Bob') }
     

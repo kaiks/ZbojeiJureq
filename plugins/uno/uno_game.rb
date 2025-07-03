@@ -8,15 +8,16 @@ require 'thread'
 
 require_relative 'interfaces/notifier'
 require_relative 'interfaces/renderer'
+require_relative 'interfaces/repository'
 
 class UnoGame
   prepend ThreadSafeDefault
   attr_reader :players, :top_card, :game_state, :creator
   attr_reader :card_stack
   attr_reader :starting_stack, :first_player
-  attr_accessor :notifier, :renderer
+  attr_accessor :notifier, :renderer, :repository
 
-  def initialize(creator, casual = 0, notifier = nil, renderer = nil)
+  def initialize(creator, casual = 0, notifier = nil, renderer = nil, repository = nil)
     @players = []
     @stacked_cards = 0
     @card_stack = nil
@@ -33,6 +34,7 @@ class UnoGame
     @full_deck.fill
     @notifier = notifier || Uno::ConsoleNotifier.new
     @renderer = renderer || Uno::TextRenderer.new
+    @repository = repository || (@casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new)
     db_create_game
   end
 
@@ -362,8 +364,8 @@ class UnoGame
     winning_string = "#{@players[0]} gains #{@total_score} points."
     if @casual != 1
       db_update_after_game_ended
-      player_stats = UnoRankModel[@players[0].to_s]
-      winning_string += " For a total of #{player_stats.total_score}, and a total of #{player_stats.games} games played."
+      player_stats = @repository.get_player_stats(@players[0].to_s)
+      winning_string += " For a total of #{player_stats[:total_score]}, and a total of #{player_stats[:games]} games played."
     end
     notify winning_string
     clean_up_end_game
@@ -383,88 +385,46 @@ class UnoGame
   end
 
   def db_save_card(card, player, received = 0)
-    unless @casual == 1
-      dbcard = UnoTurnModel.create(
-        card: card.to_s,
-        figure: card.normalize_figure,
-        color: card.normalize_color,
-        player: player.to_s,
-        received: received,
-        time: Time.now.strftime('%F %T'),
-        game: @game.ID
-      )
-      dbcard.save
-    end
+    @repository.save_card_action(@game_id, card, player, received > 0)
   end
 
   def db_create_game
-    unless @casual == 1
-      @game = UnoGameModel.create(
-        start: Time.now.strftime('%F %T'),
-        created_by: @creator
-      )
-      @game.save
-    end
+    @game_id = @repository.create_game(@creator, Time.now.strftime('%F %T'))
   end
 
   def db_update_after_game_ended
     unless @casual == 1
-      @game.points = @total_score
-
-      @game.winner = @players[0]
-      @game.end = Time.now.strftime('%F %T')
-      @game.players = @players.size
-
       db_update_player_rank
-
-      players_game_no = UNODB[:uno].where(nick: @players[0].to_s).first[:games]
-      @game.game = players_game_no
-      @game.save
+      
+      winner_stats = @repository.get_player_stats(@players[0].to_s)
+      @repository.update_game_ended(
+        @game_id,
+        @players[0].to_s,
+        Time.now.strftime('%F %T'),
+        @total_score,
+        @players.size,
+        winner_stats[:games]
+      )
     end
   end
 
   def db_update_player_rank
     unless @casual == 1
       @players.each do |p|
-        player_record = UnoRankModel[p.to_s]
-
-        player_record = UnoRankModel.create(nick: p.to_s) if player_record.nil?
-
-        player_record.games += 1
-        if p == @players[0]
-          @game.total_score = player_record.total_score
-          player_record.wins += 1
-          player_record.total_score += @total_score
-        end
-
-        player_record.save
+        won = (p == @players[0])
+        points = won ? @total_score : 0
+        @repository.update_player_stats(p.to_s, won, points)
       end
     end
   end
 
   def db_player_joins(player)
-    unless @casual == 1
-      action = UnoActionModel.create(
-        game: @game.ID,
-        action: 0,
-        player: player,
-        subject: player
-      )
-      puts action.to_s
-      action.save
-    end
+    @repository.record_player_join(@game_id, player)
+    debug "Player #{player} joined game #{@game_id}"
   end
 
   def db_stop(player)
-    unless @casual == 1
-      action = UnoActionModel.create(
-        game: @game.ID,
-        action: 2,
-        player: player,
-        subject: player
-      )
-      action.save
-    end
+    @repository.record_game_stopped(@game_id, player)
   end
 end
 
@@ -475,7 +435,8 @@ class IrcUnoGame < UnoGame
     require_relative 'interfaces/irc_notifier'
     notifier = Uno::IrcNotifier.new(irc, channel) if irc
     renderer = Uno::IrcRenderer.new
-    super(creator, casual, notifier, renderer)
+    repository = casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new
+    super(creator, casual, notifier, renderer, repository)
   end
 
   def clean_up_end_game

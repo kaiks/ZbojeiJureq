@@ -113,7 +113,7 @@ class UnoPlugin
 
   def join(m)
     puts "Current players: " + @game.players.to_s
-    if @game.players.find{ |p| m.user.nick == p.nick }.nil?
+    if @game.players.find{ |p| p.matches?(m.user.nick) }.nil?
       new_player = UnoPlayer.new(m.user.nick)
       @game.add_player new_player
     else
@@ -127,13 +127,13 @@ class UnoPlugin
   end
 
   def pass(m)
-    if m.user.nick == @game.players[0].nick
+    if @game.players[0].matches?(m.user.nick)
       @game.turn_pass
     end
   end
 
   def pick(m)
-    if m.user.nick == @game.players[0].nick
+    if @game.players[0].matches?(m.user.nick)
       @game.pick_single
     end
   end
@@ -146,7 +146,7 @@ class UnoPlugin
   end
 
   def play(m)
-    if m.user.nick == @game.players[0].nick
+    if @game.players[0].matches?(m.user.nick)
       proposed_card_text = m.message.split[1]
       card_text = proposed_card_text
       card = nil

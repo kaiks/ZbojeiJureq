@@ -73,9 +73,9 @@ class UnoGame
 
     if first_player.nil?
       @players.shuffle!
-      @first_player = @players[0].nick
+      @first_player = @players[0].identity.id
     else
-      if @players[0].nick == first_player
+      if @players[0].matches?(first_player)
         puts 'rotate1'
         rotated = true
         @players.rotate! # other player has to start with same hand
@@ -134,7 +134,7 @@ class UnoGame
   end
 
   def show_card_count
-    notify "Card count: #{@players.map { |p| p.nick + ' ' + p.hand.size.to_s }.join(', ')}"
+    notify "Card count: #{@players.map { |p| p.to_s + ' ' + p.hand.size.to_s }.join(', ')}"
   end
 
   def deal_cards_to_players
@@ -214,7 +214,7 @@ class UnoGame
     if @locked == false
       @players.push p
       @players.shuffle!
-      db_player_joins p.nick unless @casual == 1
+      db_player_joins p.to_s unless @casual == 1
       notify "#{p} joins the game"
     else
       notify "Sorry, it's not possible to join this game anymore."
@@ -223,7 +223,7 @@ class UnoGame
 
   def remove_player(p)
     @players.delete! p
-    stop_game p.nick if @players.empty?
+    stop_game p.to_s if @players.empty?
   end
 
   def stop_game(nick)
@@ -231,7 +231,8 @@ class UnoGame
   end
 
   def rename_player(old_nick, new_nick)
-    @players.detect { |player| player.nick == old_nick }.nick = new_nick
+    player = @players.detect { |p| p.matches?(old_nick) }
+    player.change_nick(new_nick) if player
   end
 
   def notify_order

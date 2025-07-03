@@ -73,8 +73,9 @@ class UnoPlugin
   end
 
   def ca(m)
-    if @game.players.map(&:nick).member? m.user.nick
-      @game.show_player_cards(@game.players.find{ |p| m.user.nick==p.nick })
+    current_player = @game.players.find{ |p| p.matches?(m.user.nick) }
+    if current_player
+      @game.show_player_cards(current_player)
     end
     if @game.game_state > 0
       @game.show_card_count
@@ -82,7 +83,7 @@ class UnoPlugin
   end
 
   def cd(m)
-    return unless @game.players.map(&:nick).member? m.user.nick
+    return unless @game.players.any? { |p| p.matches?(m.user.nick) }
     @game.notify_top_card
   end
 
@@ -122,7 +123,7 @@ class UnoPlugin
   end
 
   def order(m)
-    players_ordered = @game.players.map(&:nick).join(' ')
+    players_ordered = @game.players.map(&:to_s).join(' ')
     @game.notify "Current order: #{players_ordered}"
   end
 

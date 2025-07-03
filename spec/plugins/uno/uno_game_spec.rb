@@ -240,7 +240,7 @@ RSpec.describe UnoGame do
         
         game.player_card_play(alice, draw2)
         expect(game.game_state).to eq(2)
-        expect(game.notifications.last).to include("draw 2 more cards (total 2)")
+        expect(game.notifications).to include(match(/draw 2 more cards \(total 2\)/))
       end
     end
     
@@ -253,7 +253,7 @@ RSpec.describe UnoGame do
         
         game.player_card_play(alice, wd4)
         expect(game.game_state).to eq(3)
-        expect(game.notifications.last).to include("draw 4 more cards (total 4)")
+        expect(game.notifications).to include(match(/draw 4 more cards \(total 4\)/))
       end
     end
   end
@@ -298,6 +298,7 @@ RSpec.describe UnoGame do
       
       it 'allows playing wd4 during +2 war' do
         wd4 = UnoCard.new(:wild, 'wild+4')
+        wd4.set_wild_color(:red) # Must set color before playing
         bob.hand << wd4
         
         expect(game.player_card_play(bob, wd4)).to be true

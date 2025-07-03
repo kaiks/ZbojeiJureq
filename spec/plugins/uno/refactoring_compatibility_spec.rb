@@ -151,6 +151,11 @@ RSpec.describe "Refactoring Compatibility" do
       playable_card = current_player.hand.find { |card| game.playable_now?(card) }
       
       if playable_card
+        # Set color for wild cards
+        if playable_card.color == :wild
+          playable_card.set_wild_color(:red)
+        end
+        
         # Play the card
         success = game.player_card_play(current_player, playable_card)
         expect(success).to be true

@@ -18,6 +18,8 @@ class CardStack < Hand
       self << UnoCard.parse('ww')
       self << UnoCard.parse('wd4')
     end
+    
+    self
   end
 
   # shuffle!

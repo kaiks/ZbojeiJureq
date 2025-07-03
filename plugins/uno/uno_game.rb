@@ -6,13 +6,17 @@ require 'thread'
 
 # game states: 0 OFF, 1 ON, 2 WAR, 3WARWD
 
+require_relative 'interfaces/notifier'
+require_relative 'interfaces/renderer'
+
 class UnoGame
   prepend ThreadSafeDefault
   attr_reader :players, :top_card, :game_state, :creator
   attr_reader :card_stack
   attr_reader :starting_stack, :first_player
+  attr_accessor :notifier, :renderer
 
-  def initialize(creator, casual = 0)
+  def initialize(creator, casual = 0, notifier = nil, renderer = nil)
     @players = []
     @stacked_cards = 0
     @card_stack = nil
@@ -27,6 +31,8 @@ class UnoGame
     @casual = casual
     @full_deck = CardStack.new
     @full_deck.fill
+    @notifier = notifier || Uno::ConsoleNotifier.new
+    @renderer = renderer || Uno::TextRenderer.new
     db_create_game
   end
 
@@ -122,7 +128,7 @@ class UnoGame
   end
 
   def show_player_cards(player)
-    notify_player player, player.hand.to_irc_s.to_s
+    notify_player player, @renderer.render_hand(player.hand)
   end
 
   def show_card_count
@@ -161,7 +167,7 @@ class UnoGame
       db_save_card card, p.to_s, 1
     end
 
-    notify_player(p, "You draw #{n} card#{n > 1 ? 's' : ''}: #{picked.to_irc_s}")
+    notify_player(p, "You draw #{n} card#{n > 1 ? 's' : ''}: #{@renderer.render_hand(picked)}")
     p.hand << picked
 
     p.hand.sort! { |a, b| a.to_s <=> b.to_s }
@@ -232,21 +238,21 @@ class UnoGame
 
   def notify_top_card(passes = false)
     pass_string = passes == true ? "#{@players[-1]} passes. " : ''
-    notify "#{pass_string}#{@players[0]}'s turn. Top card: #{@top_card.to_irc_s}"
+    notify "#{pass_string}#{@players[0]}'s turn. Top card: #{@renderer.render_card(@top_card)}"
   end
 
   def notify(text)
-    puts text
+    @notifier.notify_game(text)
   end
 
   def clean_up_end_game; end
 
   def notify_player(p, text)
-    puts "[To #{p}]: #{text}"
+    @notifier.notify_player(p.to_s, text)
   end
 
   def debug(text)
-    puts "-debug- #{text}"
+    @notifier.debug(text)
   end
 
   def playable_now?(card)
@@ -463,15 +469,13 @@ class UnoGame
 end
 
 class IrcUnoGame < UnoGame
-  attr_accessor :irc
   attr_accessor :plugin
 
-  def notify(text)
-    @irc.Channel('#kx').send text
-  end
-
-  def notify_player(p, text)
-    @irc.User(p.nick).notice text
+  def initialize(creator, casual = 0, irc = nil, channel = '#kx')
+    require_relative 'interfaces/irc_notifier'
+    notifier = Uno::IrcNotifier.new(irc, channel) if irc
+    renderer = Uno::IrcRenderer.new
+    super(creator, casual, notifier, renderer)
   end
 
   def clean_up_end_game

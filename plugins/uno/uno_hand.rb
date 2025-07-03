@@ -20,6 +20,7 @@ class Hand < Array
     map(&:to_s).reduce { |old, new| old += " #{new}" }
   end
 
+  # @deprecated Use renderer.render_hand instead
   def to_irc_s
     map(&:to_irc_s).reduce { |old, new| old += " #{new}" }
   end
@@ -28,6 +29,7 @@ class Hand < Array
     detect { |card| card.to_s == card_string }
   end
 
+  # @deprecated Use renderer.render_hand instead
   def bot_output
     map(&:bot_output).reduce { |old, new| old += "#{new}#{3.chr}" }
   end
@@ -65,15 +67,15 @@ class Hand < Array
   end
 
   def select(&block)
-    Hand.new(super.select { block })
+    Hand.new(super(&block))
   end
 
   def reverse
-    Hand.new(super.reverse)
+    Hand.new(super)
   end
 
   def reverse!
-    super.reverse!
+    super
   end
 
   # Uno::COLORS[color]

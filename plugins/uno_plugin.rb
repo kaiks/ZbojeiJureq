@@ -173,9 +173,8 @@ class UnoPlugin
 
   def start(m)
     if @game.nil?
-      @game = (IrcUnoGame.new m.user.nick)
-      @game.irc ||= @bot
-      @game.plugin ||= self
+      @game = IrcUnoGame.new(m.user.nick, 0, @bot, m.channel.name)
+      @game.plugin = self
       m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join(m)
     else
@@ -185,9 +184,8 @@ class UnoPlugin
 
   def start_casual(m)
     if @game.nil?
-      @game = IrcUnoGame.new(m.user.nick, 1)
-      @game.irc ||= @bot
-      @game.plugin ||= self
+      @game = IrcUnoGame.new(m.user.nick, 1, @bot, m.channel.name)
+      @game.plugin = self
       m.reply "Ok, created casual 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join(m)
     else

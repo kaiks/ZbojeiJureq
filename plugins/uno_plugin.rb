@@ -1,19 +1,17 @@
 require 'thread'
-require './plugins/uno/uno_game.rb'
+require 'jedna'
 require './plugins/uno/uno_db.rb'
 require './config.rb'
 
 # IRC-specific UnoGame implementation with thread safety
-class IrcUnoGame < UnoGame
+class IrcUnoGame < Jedna::Game
   # Include thread safety for IRC bot usage
   prepend ThreadSafeDefault
   
   def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil)
-    require './plugins/uno/interfaces/irc_notifier'
-    require './plugins/uno/interfaces/renderer'
-    notifier = Uno::IrcNotifier.new(irc, channel) if irc
-    renderer = Uno::IrcRenderer.new
-    repository = casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new
+    notifier = Jedna::IrcNotifier.new(irc, channel) if irc
+    renderer = Jedna::IrcRenderer.new
+    repository = casual == 1 ? Jedna::NullRepository.new : Jedna::SqliteRepository.new
     super(creator, casual, notifier, renderer, repository)
     
     # Set up the hook for game ended
@@ -136,7 +134,7 @@ class UnoPlugin
   def join(m)
     puts "Current players: " + @game.players.to_s
     if @game.players.find{ |p| p.matches?(m.user.nick) }.nil?
-      new_player = UnoPlayer.new(m.user.nick)
+      new_player = Jedna::Player.new(m.user.nick)
       @game.add_player new_player
     else
       m.reply "You are already in the game, #{m.user.nick}."
@@ -269,14 +267,8 @@ class UnoPlugin
   end
 
   def reload(m)
-    load './plugins/uno/misc.rb'
-    load './plugins/uno/uno.rb'
-    load './plugins/uno/uno_card.rb'
-    load './plugins/uno/uno_card_stack.rb'
-    load './plugins/uno/uno_deck.rb'
-    load './plugins/uno/uno_game.rb'
-    load './plugins/uno/uno_hand.rb'
-    load './plugins/uno/uno_player.rb'
+    # Reload the jedna gem files
+    $LOADED_FEATURES.grep(/jedna/).each { |f| load f }
     load './plugins/uno/uno_db.rb'
     m.reply 'Uno reloaded.'
   end

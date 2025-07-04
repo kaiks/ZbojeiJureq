@@ -1,21 +1,7 @@
 require 'spec_helper'
 require 'sequel'
 require 'tempfile'
-
-# Load all UNO-related files
-require_relative '../../../extensions/thread_safe'
-require_relative '../../../plugins/uno/misc'
-require_relative '../../../plugins/uno/uno'
-require_relative '../../../plugins/uno/uno_card'
-require_relative '../../../plugins/uno/uno_hand'
-require_relative '../../../plugins/uno/uno_card_stack'
-require_relative '../../../plugins/uno/uno_deck'
-require_relative '../../../plugins/uno/interfaces/player_identity'
-require_relative '../../../plugins/uno/uno_player'
-require_relative '../../../plugins/uno/interfaces/notifier'
-require_relative '../../../plugins/uno/interfaces/renderer'
-require_relative '../../../plugins/uno/interfaces/repository'
-require_relative '../../../plugins/uno/uno_game'
+require 'jedna'
 
 # Set up test database
 def setup_test_database
@@ -76,7 +62,7 @@ end
 
 # Mock notifier that captures notifications
 class TestNotifier
-  include Uno::Notifier
+  include Jedna::Notifier
   
   attr_reader :game_notifications, :player_notifications, :errors, :debug_messages
   
@@ -105,13 +91,13 @@ class TestNotifier
 end
 
 # Mock IRC game for testing
-class TestUnoGame < UnoGame
+class TestUnoGame < Jedna::Game
   attr_reader :test_notifier
   
   def initialize(creator, casual = 0)
     @test_notifier = TestNotifier.new
-    renderer = Uno::TextRenderer.new
-    repository = Uno::NullRepository.new
+    renderer = Jedna::TextRenderer.new
+    repository = Jedna::NullRepository.new
     super(creator, casual, @test_notifier, renderer, repository)
   end
   
@@ -132,7 +118,7 @@ end
 def create_game_with_players(player_names = ['Alice', 'Bob'])
   game = TestUnoGame.new(player_names.first, 1) # casual mode to skip DB
   player_names.each do |name|
-    game.add_player(UnoPlayer.new(name))
+    game.add_player(Jedna::Player.new(name))
   end
   game
 end
@@ -180,8 +166,8 @@ end
 # Shared contexts
 RSpec.shared_context "uno game setup" do
   let(:game) { TestUnoGame.new('TestCreator', 1) }
-  let(:alice) { UnoPlayer.new('Alice') }
-  let(:bob) { UnoPlayer.new('Bob') }
+  let(:alice) { Jedna::Player.new('Alice') }
+  let(:bob) { Jedna::Player.new('Bob') }
   
   before do
     game.add_player(alice)

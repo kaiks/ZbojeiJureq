@@ -4,6 +4,13 @@ GIT
   specs:
     cinch (2.4.0)
 
+GIT
+  remote: https://github.com/kaiks/jedna.git
+  revision: 5fbfe2b61095428f3895d78dc9b1879f3fd71001
+  specs:
+    jedna (0.1.0)
+      monitor (~> 0.1)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -45,6 +52,7 @@ GEM
       i18n (>= 0.6.4, <= 2)
     money-oxr (0.4.3)
       money (>= 6.13.5)
+    monitor (0.2.0)
     net-ftp (0.3.8)
       net-protocol
       time
@@ -88,6 +96,7 @@ DEPENDENCIES
   cinch-identify
   dentaku
   http
+  jedna!
   money
   money-oxr
   net-ftp

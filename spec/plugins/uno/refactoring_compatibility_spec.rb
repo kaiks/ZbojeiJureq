@@ -1,30 +1,19 @@
 require 'spec_helper'
-require_relative '../../../extensions/thread_safe'
-require_relative '../../../plugins/uno/misc'
-require_relative '../../../plugins/uno/uno'
-require_relative '../../../plugins/uno/uno_card'
-require_relative '../../../plugins/uno/uno_hand'
-require_relative '../../../plugins/uno/uno_card_stack'
-require_relative '../../../plugins/uno/interfaces/player_identity'
-require_relative '../../../plugins/uno/uno_player'
-require_relative '../../../plugins/uno/interfaces/notifier'
-require_relative '../../../plugins/uno/interfaces/renderer'
-require_relative '../../../plugins/uno/interfaces/repository'
-require_relative '../../../plugins/uno/uno_game'
+require 'jedna'
 
 RSpec.describe "Refactoring Compatibility" do
   describe "UnoGame with all interfaces" do
-    let(:game) { UnoGame.new('TestCreator', 1, Uno::ConsoleNotifier.new, Uno::IrcRenderer.new, Uno::NullRepository.new) }
+    let(:game) { Jedna::Game.new('TestCreator', 1, Jedna::ConsoleNotifier.new, Jedna::IrcRenderer.new, Jedna::NullRepository.new) }
     
     it "initializes with all correct interfaces" do
-      expect(game.notifier).to be_a(Uno::ConsoleNotifier)
-      expect(game.renderer).to be_a(Uno::IrcRenderer)
-      expect(game.repository).to be_a(Uno::NullRepository)  # Casual mode
+      expect(game.notifier).to be_a(Jedna::ConsoleNotifier)
+      expect(game.renderer).to be_a(Jedna::IrcRenderer)
+      expect(game.repository).to be_a(Jedna::NullRepository)  # Casual mode
     end
     
     it "creates players with backward compatible identity" do
-      player1 = UnoPlayer.new('Alice')
-      player2 = UnoPlayer.new('Bob')
+      player1 = Jedna::Player.new('Alice')
+      player2 = Jedna::Player.new('Bob')
       
       game.add_player(player1)
       game.add_player(player2)
@@ -35,8 +24,8 @@ RSpec.describe "Refactoring Compatibility" do
     end
     
     it "handles player matching correctly" do
-      alice = UnoPlayer.new('Alice')
-      bob = UnoPlayer.new('Bob')
+      alice = Jedna::Player.new('Alice')
+      bob = Jedna::Player.new('Bob')
       
       game.add_player(alice)
       game.add_player(bob)
@@ -52,8 +41,8 @@ RSpec.describe "Refactoring Compatibility" do
     end
     
     it "starts and plays game with all interfaces" do
-      alice = UnoPlayer.new('Alice')
-      bob = UnoPlayer.new('Bob')
+      alice = Jedna::Player.new('Alice')
+      bob = Jedna::Player.new('Bob')
       
       game.add_player(alice)
       game.add_player(bob)
@@ -65,7 +54,7 @@ RSpec.describe "Refactoring Compatibility" do
       expect(game.players.all? { |p| p.hand.size == 7 }).to be true
       
       # Verify notifier captured messages
-      if game.notifier.is_a?(Uno::NullNotifier)
+      if game.notifier.is_a?(Jedna::NullNotifier)
         expect(game.notifier.game_notifications).to include(match(/Alice joins the game|Bob joins the game/))
       end
     end
@@ -73,9 +62,9 @@ RSpec.describe "Refactoring Compatibility" do
   
   describe "Player identity backward compatibility" do
     it "maintains equality comparison" do
-      player1_old = UnoPlayer.new('Alice')  # String-based
-      player2_old = UnoPlayer.new('Alice')  # String-based
-      player3_new = UnoPlayer.new(Uno::IrcIdentity.new('Alice'))  # Identity-based
+      player1_old = Jedna::Player.new('Alice')  # String-based
+      player2_old = Jedna::Player.new('Alice')  # String-based
+      player3_new = Jedna::Player.new(Jedna::IrcIdentity.new('Alice'))  # Identity-based
       
       # Old-style comparison still works
       expect(player1_old == player2_old).to be true
@@ -86,7 +75,7 @@ RSpec.describe "Refactoring Compatibility" do
     end
     
     it "supports nick changes" do
-      player = UnoPlayer.new('Alice')
+      player = Jedna::Player.new('Alice')
       player.identity.update_display_name('Alice2')
       
       expect(player.identity.display_name).to eq('Alice2')
@@ -96,11 +85,11 @@ RSpec.describe "Refactoring Compatibility" do
   end
   
   describe "Renderer integration" do
-    let(:game) { UnoGame.new('TestCreator', 1, nil, Uno::IrcRenderer.new) }
+    let(:game) { Jedna::Game.new('TestCreator', 1, nil, Jedna::IrcRenderer.new) }
     let(:renderer) { game.renderer }
     
     it "renders cards correctly" do
-      card = UnoCard.new(:red, 5)
+      card = Jedna::Card.new(:red, 5)
       rendered = renderer.render_card(card)
       
       expect(rendered).to include('[5]')
@@ -108,10 +97,10 @@ RSpec.describe "Refactoring Compatibility" do
     end
     
     it "renders hands correctly" do
-      hand = Hand.new([
-        UnoCard.new(:red, 5),
-        UnoCard.new(:blue, 'skip'),
-        UnoCard.new(:wild, 'wild')
+      hand = Jedna::Hand.new([
+        Jedna::Card.new(:red, 5),
+        Jedna::Card.new(:blue, 'skip'),
+        Jedna::Card.new(:wild, 'wild')
       ])
       
       rendered = renderer.render_hand(hand)
@@ -123,21 +112,21 @@ RSpec.describe "Refactoring Compatibility" do
   
   describe "Repository integration" do
     it "handles casual games with NullRepository" do
-      game = UnoGame.new('TestCreator', 1)  # Casual
-      expect(game.repository).to be_a(Uno::NullRepository)
+      game = Jedna::Game.new('TestCreator', 1)  # Casual
+      expect(game.repository).to be_a(Jedna::NullRepository)
       
       # Should not raise errors
       expect { game.db_create_game }.not_to raise_error
-      expect { game.db_save_card(UnoCard.new(:red, 5), 'Alice') }.not_to raise_error
+      expect { game.db_save_card(Jedna::Card.new(:red, 5), 'Alice') }.not_to raise_error
     end
   end
   
   describe "Full game flow" do
-    let(:game) { UnoGame.new('TestCreator', 1, Uno::ConsoleNotifier.new, Uno::IrcRenderer.new) }
+    let(:game) { Jedna::Game.new('TestCreator', 1, Jedna::ConsoleNotifier.new, Jedna::IrcRenderer.new) }
     
     it "plays through a turn successfully" do
-      alice = UnoPlayer.new('Alice')
-      bob = UnoPlayer.new('Bob')
+      alice = Jedna::Player.new('Alice')
+      bob = Jedna::Player.new('Bob')
       
       game.add_player(alice)
       game.add_player(bob)

@@ -3,8 +3,6 @@ module Uno
   COLORS = %i[red green blue yellow wild].freeze
 
   SHORT_COLORS = %w[r g b y] + ['']
-  IRC_COLOR_CODES = { 'r' => 4, 'g' => 4, 'b' => 12, 'y' => 7, 'w' => 13 }.freeze
-  # IRC_COLOR_CODES = %w(4 3 12 7)
 
   STANDARD_FIGURES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, '+2', 'reverse', 'skip'].freeze
   STANDARD_SHORT_FIGURES = %w[0 1 2 3 4 5 6 7 8 9 +2 r s].freeze

@@ -3,6 +3,27 @@ require './plugins/uno/uno_game.rb'
 require './plugins/uno/uno_db.rb'
 require './config.rb'
 
+# IRC-specific UnoGame implementation with thread safety
+class IrcUnoGame < UnoGame
+  # Include thread safety for IRC bot usage
+  prepend ThreadSafeDefault
+  
+  def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil)
+    require './plugins/uno/interfaces/irc_notifier'
+    require './plugins/uno/interfaces/renderer'
+    notifier = Uno::IrcNotifier.new(irc, channel) if irc
+    renderer = Uno::IrcRenderer.new
+    repository = casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new
+    super(creator, casual, notifier, renderer, repository)
+    
+    # Set up the hook for game ended
+    on_game_ended do
+      plugin.upload_db unless casual == 1
+      plugin.end_game if plugin
+    end
+  end
+end
+
 class UnoGameHistory
   attr_accessor :stack
   attr_accessor :players
@@ -174,8 +195,7 @@ class UnoPlugin
 
   def start(m)
     if @game.nil?
-      @game = IrcUnoGame.new(m.user.nick, 0, @bot, m.channel.name)
-      @game.plugin = self
+      @game = IrcUnoGame.new(m.user.nick, 0, @bot, m.channel.name, self)
       m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join(m)
     else
@@ -185,8 +205,7 @@ class UnoPlugin
 
   def start_casual(m)
     if @game.nil?
-      @game = IrcUnoGame.new(m.user.nick, 1, @bot, m.channel.name)
-      @game.plugin = self
+      @game = IrcUnoGame.new(m.user.nick, 1, @bot, m.channel.name, self)
       m.reply "Ok, created casual 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join(m)
     else

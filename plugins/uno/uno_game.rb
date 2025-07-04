@@ -11,7 +11,6 @@ require_relative 'interfaces/renderer'
 require_relative 'interfaces/repository'
 
 class UnoGame
-  prepend ThreadSafeDefault
   attr_reader :players, :top_card, :game_state, :creator
   attr_reader :card_stack
   attr_reader :starting_stack, :first_player
@@ -35,11 +34,17 @@ class UnoGame
     @notifier = notifier || Uno::ConsoleNotifier.new
     @renderer = renderer || Uno::TextRenderer.new
     @repository = repository || (@casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new)
+    @on_game_ended = nil  # Simple hook for game ended event
     db_create_game
   end
 
   def started?
     @game_state > 0
+  end
+  
+  # Simple hook setter - allows external code to be notified when game ends
+  def on_game_ended(&block)
+    @on_game_ended = block
   end
 
   def start_game(stack = nil, first_player = nil)
@@ -250,7 +255,6 @@ class UnoGame
     @notifier.notify_game(text)
   end
 
-  def clean_up_end_game; end
 
   def notify_player(p, text)
     @notifier.notify_player(p.to_s, text)
@@ -371,7 +375,9 @@ class UnoGame
       winning_string += " For a total of #{player_stats[:total_score]}, and a total of #{player_stats[:games]} games played."
     end
     notify winning_string
-    clean_up_end_game
+    
+    # Call the hook if one was set
+    @on_game_ended.call if @on_game_ended
   end
 
   def end_game(_nick) # todo
@@ -428,23 +434,6 @@ class UnoGame
 
   def db_stop(player)
     @repository.record_game_stopped(@game_id, player)
-  end
-end
-
-class IrcUnoGame < UnoGame
-  attr_accessor :plugin
-
-  def initialize(creator, casual = 0, irc = nil, channel = '#kx')
-    require_relative 'interfaces/irc_notifier'
-    notifier = Uno::IrcNotifier.new(irc, channel) if irc
-    renderer = Uno::IrcRenderer.new
-    repository = casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new
-    super(creator, casual, notifier, renderer, repository)
-  end
-
-  def clean_up_end_game
-    @plugin.upload_db unless @casual
-    @plugin.end_game
   end
 end
 # g = UnoGame.new

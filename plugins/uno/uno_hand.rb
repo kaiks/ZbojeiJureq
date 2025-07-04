@@ -20,19 +20,11 @@ class Hand < Array
     map(&:to_s).reduce { |old, new| old += " #{new}" }
   end
 
-  # @deprecated Use renderer.render_hand instead
-  def to_irc_s
-    map(&:to_irc_s).reduce { |old, new| old += " #{new}" }
-  end
 
   def find_card(card_string)
     detect { |card| card.to_s == card_string }
   end
 
-  # @deprecated Use renderer.render_hand instead
-  def bot_output
-    map(&:bot_output).reduce { |old, new| old += "#{new}#{3.chr}" }
-  end
 
   def reset_wilds
     each(&:unset_wild_color)

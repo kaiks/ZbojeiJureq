@@ -13,11 +13,11 @@ require_relative '../../../plugins/uno/interfaces/repository'
 require_relative '../../../plugins/uno/uno_game'
 
 RSpec.describe "Refactoring Compatibility" do
-  describe "IrcUnoGame with all interfaces" do
-    let(:game) { IrcUnoGame.new('TestCreator', 1) }  # Casual mode
+  describe "UnoGame with all interfaces" do
+    let(:game) { UnoGame.new('TestCreator', 1, Uno::ConsoleNotifier.new, Uno::IrcRenderer.new, Uno::NullRepository.new) }
     
     it "initializes with all correct interfaces" do
-      expect(game.notifier).to be_a(Uno::ConsoleNotifier)  # Falls back when no IRC
+      expect(game.notifier).to be_a(Uno::ConsoleNotifier)
       expect(game.renderer).to be_a(Uno::IrcRenderer)
       expect(game.repository).to be_a(Uno::NullRepository)  # Casual mode
     end
@@ -96,7 +96,7 @@ RSpec.describe "Refactoring Compatibility" do
   end
   
   describe "Renderer integration" do
-    let(:game) { IrcUnoGame.new('TestCreator', 1) }
+    let(:game) { UnoGame.new('TestCreator', 1, nil, Uno::IrcRenderer.new) }
     let(:renderer) { game.renderer }
     
     it "renders cards correctly" do
@@ -123,7 +123,7 @@ RSpec.describe "Refactoring Compatibility" do
   
   describe "Repository integration" do
     it "handles casual games with NullRepository" do
-      game = IrcUnoGame.new('TestCreator', 1)  # Casual
+      game = UnoGame.new('TestCreator', 1)  # Casual
       expect(game.repository).to be_a(Uno::NullRepository)
       
       # Should not raise errors
@@ -133,7 +133,7 @@ RSpec.describe "Refactoring Compatibility" do
   end
   
   describe "Full game flow" do
-    let(:game) { IrcUnoGame.new('TestCreator', 1) }
+    let(:game) { UnoGame.new('TestCreator', 1, Uno::ConsoleNotifier.new, Uno::IrcRenderer.new) }
     
     it "plays through a turn successfully" do
       alice = UnoPlayer.new('Alice')

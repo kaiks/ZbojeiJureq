@@ -248,15 +248,6 @@ RSpec.describe UnoCard do
     end
   end
   
-  describe '#color_number' do
-    it 'returns correct color codes' do
-      expect(UnoCard.new(:red, 5).color_number).to eq(4)
-      expect(UnoCard.new(:green, 5).color_number).to eq(3)
-      expect(UnoCard.new(:blue, 5).color_number).to eq(12)
-      expect(UnoCard.new(:yellow, 5).color_number).to eq(7)
-      expect(UnoCard.new(:wild, 'wild').color_number).to eq(13)
-    end
-  end
   
   describe '#special_card?' do
     it 'returns true for wild cards' do

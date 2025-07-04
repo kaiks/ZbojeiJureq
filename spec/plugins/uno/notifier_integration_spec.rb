@@ -47,10 +47,10 @@ RSpec.describe "Notifier integration" do
     end
   end
   
-  describe "IrcUnoGame setup" do
-    it "can be created without IRC bot (falls back to console notifier)" do
-      game = IrcUnoGame.new('TestCreator', 1)
-      expect(game).to be_a(IrcUnoGame)
+  describe "UnoGame with different notifiers" do
+    it "can be created with console notifier" do
+      game = UnoGame.new('TestCreator', 1, Uno::ConsoleNotifier.new)
+      expect(game).to be_a(UnoGame)
       expect(game.notifier).to be_a(Uno::ConsoleNotifier)
     end
   end

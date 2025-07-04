@@ -86,20 +86,6 @@ class UnoCard
     @color = :wild if special_valid_card?
   end
 
-  def color_number
-    case @color
-    when :green
-      3 #:green
-    when :red
-      4 #:red
-    when :yellow
-      7 #:yellow
-    when :blue
-      12 #:blue
-    when :wild
-      13 #:blue
-    end
-  end
 
   def normalize_color
     if Uno::COLORS.member? @color

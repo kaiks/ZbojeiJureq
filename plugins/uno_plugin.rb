@@ -3,6 +3,27 @@ require './plugins/uno/uno_game.rb'
 require './plugins/uno/uno_db.rb'
 require './config.rb'
 
+# IRC-specific UnoGame implementation with thread safety
+class IrcUnoGame < UnoGame
+  # Include thread safety for IRC bot usage
+  prepend ThreadSafeDefault
+  
+  def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil)
+    require './plugins/uno/interfaces/irc_notifier'
+    require './plugins/uno/interfaces/renderer'
+    notifier = Uno::IrcNotifier.new(irc, channel) if irc
+    renderer = Uno::IrcRenderer.new
+    repository = casual == 1 ? Uno::NullRepository.new : Uno::SqliteRepository.new
+    super(creator, casual, notifier, renderer, repository)
+    
+    # Set up the hook for game ended
+    on_game_ended do
+      plugin.upload_db unless casual == 1
+      plugin.end_game if plugin
+    end
+  end
+end
+
 class UnoGameHistory
   attr_accessor :stack
   attr_accessor :players
@@ -73,8 +94,9 @@ class UnoPlugin
   end
 
   def ca(m)
-    if @game.players.map(&:nick).member? m.user.nick
-      @game.show_player_cards(@game.players.find{ |p| m.user.nick==p.nick })
+    current_player = @game.players.find{ |p| p.matches?(m.user.nick) }
+    if current_player
+      @game.show_player_cards(current_player)
     end
     if @game.game_state > 0
       @game.show_card_count
@@ -82,7 +104,7 @@ class UnoPlugin
   end
 
   def cd(m)
-    return unless @game.players.map(&:nick).member? m.user.nick
+    return unless @game.players.any? { |p| p.matches?(m.user.nick) }
     @game.notify_top_card
   end
 
@@ -113,7 +135,7 @@ class UnoPlugin
 
   def join(m)
     puts "Current players: " + @game.players.to_s
-    if @game.players.find{ |p| m.user.nick == p.nick }.nil?
+    if @game.players.find{ |p| p.matches?(m.user.nick) }.nil?
       new_player = UnoPlayer.new(m.user.nick)
       @game.add_player new_player
     else
@@ -122,18 +144,18 @@ class UnoPlugin
   end
 
   def order(m)
-    players_ordered = @game.players.map(&:nick).join(' ')
+    players_ordered = @game.players.map(&:to_s).join(' ')
     @game.notify "Current order: #{players_ordered}"
   end
 
   def pass(m)
-    if m.user.nick == @game.players[0].nick
+    if @game.players[0].matches?(m.user.nick)
       @game.turn_pass
     end
   end
 
   def pick(m)
-    if m.user.nick == @game.players[0].nick
+    if @game.players[0].matches?(m.user.nick)
       @game.pick_single
     end
   end
@@ -146,7 +168,7 @@ class UnoPlugin
   end
 
   def play(m)
-    if m.user.nick == @game.players[0].nick
+    if @game.players[0].matches?(m.user.nick)
       proposed_card_text = m.message.split[1]
       card_text = proposed_card_text
       card = nil
@@ -173,9 +195,7 @@ class UnoPlugin
 
   def start(m)
     if @game.nil?
-      @game = (IrcUnoGame.new m.user.nick)
-      @game.irc ||= @bot
-      @game.plugin ||= self
+      @game = IrcUnoGame.new(m.user.nick, 0, @bot, m.channel.name, self)
       m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join(m)
     else
@@ -185,9 +205,7 @@ class UnoPlugin
 
   def start_casual(m)
     if @game.nil?
-      @game = IrcUnoGame.new(m.user.nick, 1)
-      @game.irc ||= @bot
-      @game.plugin ||= self
+      @game = IrcUnoGame.new(m.user.nick, 1, @bot, m.channel.name, self)
       m.reply "Ok, created casual 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join(m)
     else

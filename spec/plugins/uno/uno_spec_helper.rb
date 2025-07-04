@@ -10,7 +10,11 @@ require_relative '../../../plugins/uno/uno_card'
 require_relative '../../../plugins/uno/uno_hand'
 require_relative '../../../plugins/uno/uno_card_stack'
 require_relative '../../../plugins/uno/uno_deck'
+require_relative '../../../plugins/uno/interfaces/player_identity'
 require_relative '../../../plugins/uno/uno_player'
+require_relative '../../../plugins/uno/interfaces/notifier'
+require_relative '../../../plugins/uno/interfaces/renderer'
+require_relative '../../../plugins/uno/interfaces/repository'
 require_relative '../../../plugins/uno/uno_game'
 
 # Set up test database
@@ -70,22 +74,53 @@ def cleanup_test_database
   @db_file.unlink if @db_file
 end
 
+# Mock notifier that captures notifications
+class TestNotifier
+  include Uno::Notifier
+  
+  attr_reader :game_notifications, :player_notifications, :errors, :debug_messages
+  
+  def initialize
+    @game_notifications = []
+    @player_notifications = []
+    @errors = []
+    @debug_messages = []
+  end
+  
+  def notify_game(message)
+    @game_notifications << message
+  end
+  
+  def notify_player(player_id, message)
+    @player_notifications << { player: player_id, text: message }
+  end
+  
+  def notify_error(player_id, error)
+    @errors << { player: player_id, error: error }
+  end
+  
+  def debug(message)
+    @debug_messages << message
+  end
+end
+
 # Mock IRC game for testing
 class TestUnoGame < UnoGame
-  attr_reader :notifications, :player_notifications
+  attr_reader :test_notifier
   
   def initialize(creator, casual = 0)
-    super
-    @notifications = []
-    @player_notifications = []
+    @test_notifier = TestNotifier.new
+    renderer = Uno::TextRenderer.new
+    repository = Uno::NullRepository.new
+    super(creator, casual, @test_notifier, renderer, repository)
   end
   
-  def notify(text)
-    @notifications << text
+  def notifications
+    @test_notifier.game_notifications
   end
   
-  def notify_player(player, text)
-    @player_notifications << { player: player.to_s, text: text }
+  def player_notifications
+    @test_notifier.player_notifications
   end
   
   def clean_up_end_game

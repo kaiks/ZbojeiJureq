@@ -77,14 +77,6 @@ class UnoCard
     end
   end
 
-  def to_irc_s
-    # IRC_COLOR_CODES.fetch(normalize_color.to_s,'13')
-    "#{3.chr}#{color_number}[#{normalize_figure.to_s.upcase}]"
-  end
-
-  def bot_output
-    "#{3.chr}#{color_number}[#{normalize_figure}]"
-  end
 
   def set_wild_color(color)
     @color = color if special_valid_card?
@@ -94,20 +86,6 @@ class UnoCard
     @color = :wild if special_valid_card?
   end
 
-  def color_number
-    case @color
-    when :green
-      3 #:green
-    when :red
-      4 #:red
-    when :yellow
-      7 #:yellow
-    when :blue
-      12 #:blue
-    when :wild
-      13 #:blue
-    end
-  end
 
   def normalize_color
     if Uno::COLORS.member? @color

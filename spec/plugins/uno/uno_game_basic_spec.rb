@@ -38,16 +38,18 @@ RSpec.describe "UnoGame basic functionality" do
     end
     
     it 'allows valid card play' do
-      # Give alice a matching card
+      # Give alice a matching card plus extras so game doesn't end
       card = UnoCard.new(:red, 7)
       alice.hand = Hand.new
       alice.hand << card
+      alice.hand << UnoCard.new(:blue, 5)  # Extra cards so game continues
+      alice.hand << UnoCard.new(:green, 3)
       
       result = game.player_card_play(alice, card)
       
       expect(result).to be true
       expect(game.top_card).to eq(card)
-      expect(alice.hand).to be_empty
+      expect(alice.hand.size).to eq(2)  # Should have 2 cards left
       expect(game.players[0]).to eq(bob) # Turn passed to bob
     end
     
@@ -82,12 +84,14 @@ RSpec.describe "UnoGame basic functionality" do
   end
   
   describe 'special cards' do
+    let(:charlie) { UnoPlayer.new('Charlie') }
+    
     before do
       game.add_player(alice)
       game.add_player(bob)
-      game.add_player(UnoPlayer.new('Charlie'))
+      game.add_player(charlie)
       game.start_game
-      game.instance_variable_set(:@players, [alice, bob, game.players[2]])
+      game.instance_variable_set(:@players, [alice, bob, charlie])
       game.instance_variable_set(:@top_card, UnoCard.new(:red, 5))
     end
     
@@ -95,10 +99,12 @@ RSpec.describe "UnoGame basic functionality" do
       skip_card = UnoCard.new(:red, 'skip')
       alice.hand = Hand.new
       alice.hand << skip_card
+      alice.hand << UnoCard.new(:blue, 5)  # Extra cards so game continues
+      alice.hand << UnoCard.new(:green, 3)
       
       game.player_card_play(alice, skip_card)
       
-      expect(game.players[0].nick).to eq('Charlie')
+      expect(game.players[0]).to eq(charlie)
       expect(game.notifications.any? { |n| n.include?("was skipped") }).to be true
     end
     
@@ -106,12 +112,14 @@ RSpec.describe "UnoGame basic functionality" do
       reverse_card = UnoCard.new(:red, 'reverse')
       alice.hand = Hand.new
       alice.hand << reverse_card
+      alice.hand << UnoCard.new(:blue, 5)  # Extra cards so game continues
+      alice.hand << UnoCard.new(:green, 3)
       
       # Before: [Alice, Bob, Charlie]
       game.player_card_play(alice, reverse_card)
       
       # After reverse and rotate: [Charlie, Bob, Alice]
-      expect(game.players[0].nick).to eq('Charlie')
+      expect(game.players[0]).to eq(charlie)
       expect(game.notifications.any? { |n| n.include?("reversed") }).to be true
     end
     
@@ -119,6 +127,8 @@ RSpec.describe "UnoGame basic functionality" do
       draw2 = UnoCard.new(:red, '+2')
       alice.hand = Hand.new
       alice.hand << draw2
+      alice.hand << UnoCard.new(:blue, 5)  # Extra cards so game continues
+      alice.hand << UnoCard.new(:green, 3)
       
       game.player_card_play(alice, draw2)
       
@@ -140,6 +150,8 @@ RSpec.describe "UnoGame basic functionality" do
       draw2_1 = UnoCard.new(:red, '+2')
       alice.hand = Hand.new
       alice.hand << draw2_1
+      alice.hand << UnoCard.new(:blue, 5)  # Extra cards so game continues
+      alice.hand << UnoCard.new(:green, 3)
       game.instance_variable_set(:@top_card, UnoCard.new(:red, 5))
       
       game.player_card_play(alice, draw2_1)
@@ -149,6 +161,7 @@ RSpec.describe "UnoGame basic functionality" do
       draw2_2 = UnoCard.new(:blue, '+2')
       bob.hand = Hand.new
       bob.hand << draw2_2
+      bob.hand << UnoCard.new(:yellow, 7)  # Extra cards
       
       result = game.player_card_play(bob, draw2_2)
       expect(result).to be true

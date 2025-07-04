@@ -248,14 +248,8 @@ RSpec.describe UnoCard do
     end
   end
   
-  describe '#to_irc_s' do
-    it 'formats with IRC color codes' do
-      card = UnoCard.new(:red, 5)
-      expect(card.to_irc_s).to include('[5]')
-      expect(card.to_irc_s).to include(3.chr) # IRC color code character
-    end
-    
-    it 'uses correct color codes' do
+  describe '#color_number' do
+    it 'returns correct color codes' do
       expect(UnoCard.new(:red, 5).color_number).to eq(4)
       expect(UnoCard.new(:green, 5).color_number).to eq(3)
       expect(UnoCard.new(:blue, 5).color_number).to eq(12)

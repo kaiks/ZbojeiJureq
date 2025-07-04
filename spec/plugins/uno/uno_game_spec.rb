@@ -38,8 +38,8 @@ RSpec.describe UnoGame do
       players.each { |p| game.add_player(p) }
       
       # Order should be randomized (very small chance of being in exact order)
-      original_names = players.map(&:nick)
-      game_names = game.players.map(&:nick)
+      original_names = players.map { |p| p.identity.display_name }
+      game_names = game.players.map { |p| p.identity.display_name }
       expect(game_names).to match_array(original_names)
     end
     
@@ -238,7 +238,7 @@ RSpec.describe UnoGame do
         game.player_card_play(alice, skip_card)
         
         # Bob should be skipped, Charlie's turn
-        expect(game.players[0].nick).to eq('Charlie')
+        expect(game.players[0].identity.display_name).to eq('Charlie')
         expect(game.notifications).to include("Bob was skipped!")
       end
     end
@@ -254,7 +254,7 @@ RSpec.describe UnoGame do
         # Set a matching top card
         game.instance_variable_set(:@top_card, UnoCard.new(:red, 3))
         
-        initial_order = game.players.map(&:nick)
+        initial_order = game.players.map { |p| p.identity.display_name }
         game.player_card_play(alice, reverse_card)
         
         expect(game.notifications).to include("Player order reversed!")
@@ -516,24 +516,33 @@ RSpec.describe UnoGame do
     
     it 'rejects double play with picked card' do
       current_player = game.players[0]
-      # Pick a card first
+      
+      # Set up the game state:
+      # - Top card is green 5
+      game.instance_variable_set(:@top_card, UnoCard.new(:green, 5))
+      
+      # - Player already has a red 5 in hand
+      current_player.hand = Hand.new
+      existing_r5 = UnoCard.new(:red, 5)
+      current_player.hand << existing_r5
+      current_player.hand << UnoCard.new(:blue, 3)  # Add another card so game doesn't end
+      
+      # - Ensure the next card in the deck is red 5
+      picked_r5 = UnoCard.new(:red, 5)
+      card_stack = game.instance_variable_get(:@card_stack)
+      # Insert the red 5 at the beginning of the deck so it gets picked
+      card_stack.unshift(picked_r5)
+      
+      # Pick the card (which will be red 5)
       game.pick_single
       
-      # Get the actual picked card from the game instance
+      # Verify the picked card is indeed red 5
       picked_card = game.instance_variable_get(:@picked_card)
+      expect(picked_card.to_s).to eq('r5')
       
-      if picked_card && picked_card.plays_after?(game.top_card)
-        # If it's a wild card, we need to set its color first
-        if picked_card.figure == 'wild' || picked_card.figure == 'wild+4'
-          picked_card.set_wild_color(:red)
-        end
-        
-        expect(game.player_card_play(current_player, picked_card, true)).to be false
-        expect(game.notifications.last).to include("can't play the picked card twice")
-      else
-        # If no playable card was picked, test is not applicable
-        skip "No playable card was picked"
-      end
+      # Attempting to play double r5 should fail
+      expect(game.player_card_play(current_player, picked_r5, true)).to be false
+      expect(game.notifications.last).to include("can't play the picked card twice")
     end
   end
   

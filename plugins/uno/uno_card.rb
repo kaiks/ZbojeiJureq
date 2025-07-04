@@ -77,16 +77,6 @@ class UnoCard
     end
   end
 
-  # @deprecated Use renderer.render_card instead
-  def to_irc_s
-    # IRC_COLOR_CODES.fetch(normalize_color.to_s,'13')
-    "#{3.chr}#{color_number}[#{normalize_figure.to_s.upcase}]"
-  end
-
-  # @deprecated Use renderer.render_card instead
-  def bot_output
-    "#{3.chr}#{color_number}[#{normalize_figure}]"
-  end
 
   def set_wild_color(color)
     @color = color if special_valid_card?

@@ -4,11 +4,6 @@ class UnoPlayer
   attr_accessor :hand
   attr_reader :identity
   
-  # @deprecated Use identity.display_name instead
-  def nick
-    @identity.display_name
-  end
-  
   def initialize(identity_or_nick)
     @joined = Time.now
     # Support both old string-based and new identity-based creation
@@ -25,16 +20,6 @@ class UnoPlayer
 
   def to_s
     @identity.to_s
-  end
-
-  # @deprecated Use identity.update_nick for IRC or appropriate method for other identity types
-  def change_nick(new_nick)
-    if @identity.respond_to?(:update_nick)
-      @identity.update_nick(new_nick)
-    else
-      # For non-IRC identities, this is a no-op
-      warn "change_nick called on non-IRC identity"
-    end
   end
 
   def ==(player)

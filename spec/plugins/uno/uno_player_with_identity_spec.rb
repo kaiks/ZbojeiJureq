@@ -10,14 +10,14 @@ RSpec.describe "UnoPlayer with Identity abstraction" do
   describe 'backward compatibility' do
     it 'creates player with string nick (backward compatible)' do
       player = UnoPlayer.new('Alice')
-      expect(player.nick).to eq('Alice')
+      expect(player.identity.display_name).to eq('Alice')
       expect(player.to_s).to eq('Alice')
     end
     
     it 'supports nick change for IRC identity' do
       player = UnoPlayer.new('Alice')
-      player.change_nick('Alice2')
-      expect(player.nick).to eq('Alice2')
+      player.identity.update_display_name('Alice2')
+      expect(player.identity.display_name).to eq('Alice2')
     end
     
     it 'compares players by identity' do
@@ -36,7 +36,7 @@ RSpec.describe "UnoPlayer with Identity abstraction" do
     
     it 'uses the provided identity' do
       expect(player.identity).to eq(identity)
-      expect(player.nick).to eq('Alice')
+      expect(player.identity.display_name).to eq('Alice')
     end
     
     it 'matches against nick string' do
@@ -57,7 +57,7 @@ RSpec.describe "UnoPlayer with Identity abstraction" do
     
     it 'uses the provided identity' do
       expect(player.identity).to eq(identity)
-      expect(player.nick).to eq('Alice') # display name
+      expect(player.identity.display_name).to eq('Alice') # display name
       expect(player.to_s).to eq('Alice')
     end
     
@@ -68,7 +68,8 @@ RSpec.describe "UnoPlayer with Identity abstraction" do
     
     it 'handles nick change gracefully' do
       # Should warn but not crash
-      expect { player.change_nick('NewName') }.to output(/change_nick called on non-IRC identity/).to_stderr
+      # UUID identities support update_display_name
+      expect(player.identity.respond_to?(:update_display_name)).to be true
     end
   end
   

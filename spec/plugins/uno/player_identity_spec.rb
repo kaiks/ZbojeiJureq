@@ -41,12 +41,12 @@ RSpec.describe "Uno::PlayerIdentity" do
       end
     end
     
-    describe '#update_nick' do
-      it 'updates the nick' do
-        identity.update_nick('Alice2')
+    describe '#update_display_name' do
+      it 'updates the display name' do
+        identity.update_display_name('Alice2')
+        expect(identity.display_name).to eq('Alice2')
         expect(identity.nick).to eq('Alice2')
         expect(identity.id).to eq('Alice2')
-        expect(identity.display_name).to eq('Alice2')
       end
     end
   end
@@ -74,6 +74,13 @@ RSpec.describe "Uno::PlayerIdentity" do
       
       it 'matches a string with same value' do
         expect(identity.matches?('Player1')).to be true
+      end
+    end
+    
+    describe '#update_display_name' do
+      it 'does nothing (SimpleIdentity is immutable)' do
+        identity.update_display_name('NewName')
+        expect(identity.display_name).to eq('Player1')  # Unchanged
       end
     end
   end
@@ -115,10 +122,11 @@ RSpec.describe "Uno::PlayerIdentity" do
       end
     end
     
-    describe '#update_name' do
+    describe '#update_display_name' do
       it 'updates the display name' do
-        identity.update_name('Alice2')
+        identity.update_display_name('Alice2')
         expect(identity.display_name).to eq('Alice2')
+        expect(identity.name).to eq('Alice2')
         expect(identity.id).to eq(uuid) # ID should not change
       end
     end

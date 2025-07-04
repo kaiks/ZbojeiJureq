@@ -232,7 +232,9 @@ class UnoGame
 
   def rename_player(old_nick, new_nick)
     player = @players.detect { |p| p.matches?(old_nick) }
-    player.change_nick(new_nick) if player
+    if player
+      player.identity.update_display_name(new_nick)
+    end
   end
 
   def notify_order

@@ -72,15 +72,6 @@ RSpec.describe Hand do
     end
   end
   
-  describe '#to_irc_s' do
-    it 'returns IRC formatted cards' do
-      hand << [red5, blue3]
-      irc_string = hand.to_irc_s
-      expect(irc_string).to include('[5]')
-      expect(irc_string).to include('[3]')
-      expect(irc_string).to include(3.chr) # IRC color code
-    end
-  end
   
   describe '#find_card' do
     before do
@@ -263,15 +254,6 @@ RSpec.describe Hand do
     end
   end
   
-  describe '#bot_output' do
-    it 'formats cards for bot output' do
-      hand << [red5, blue3]
-      output = hand.bot_output
-      expect(output).to include('[5]')
-      expect(output).to include('[3]')
-      expect(output).to include(3.chr) # IRC formatting
-    end
-  end
   
   describe 'Array inheritance' do
     it 'supports array methods' do

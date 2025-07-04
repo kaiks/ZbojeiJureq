@@ -30,8 +30,8 @@ RSpec.describe "Refactoring Compatibility" do
       game.add_player(player2)
       
       expect(game.players.size).to eq(2)
-      expect(game.players[0].nick).to match(/Alice|Bob/)
-      expect(game.players[1].nick).to match(/Alice|Bob/)
+      expect(game.players[0].identity.display_name).to match(/Alice|Bob/)
+      expect(game.players[1].identity.display_name).to match(/Alice|Bob/)
     end
     
     it "handles player matching correctly" do
@@ -47,8 +47,8 @@ RSpec.describe "Refactoring Compatibility" do
       
       expect(alice_player).not_to be_nil
       expect(bob_player).not_to be_nil
-      expect(alice_player.nick).to eq('Alice')
-      expect(bob_player.nick).to eq('Bob')
+      expect(alice_player.identity.display_name).to eq('Alice')
+      expect(bob_player.identity.display_name).to eq('Bob')
     end
     
     it "starts and plays game with all interfaces" do
@@ -87,9 +87,9 @@ RSpec.describe "Refactoring Compatibility" do
     
     it "supports nick changes" do
       player = UnoPlayer.new('Alice')
-      player.change_nick('Alice2')
+      player.identity.update_display_name('Alice2')
       
-      expect(player.nick).to eq('Alice2')
+      expect(player.identity.display_name).to eq('Alice2')
       expect(player.matches?('Alice2')).to be true
       expect(player.matches?('Alice')).to be false
     end

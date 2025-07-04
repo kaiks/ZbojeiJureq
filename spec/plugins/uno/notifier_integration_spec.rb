@@ -8,87 +8,10 @@ require_relative '../../../plugins/uno/uno_card_stack'
 require_relative '../../../plugins/uno/uno_player'
 require_relative '../../../plugins/uno/uno_game'
 
-# We'll temporarily remove ThreadSafeDefault for testing
-class UnoGameWithoutThreadSafety
-  attr_reader :players, :top_card, :game_state, :creator
-  attr_reader :card_stack
-  attr_reader :starting_stack, :first_player
-  attr_accessor :notifier, :repository
-  
-  def initialize(creator, casual = 0, notifier = nil, repository = nil)
-    @players = []
-    @stacked_cards = 0
-    @card_stack = nil
-    @played_cards = nil
-    @top_card = nil
-    @picked_card = nil
-    @locked = false
-    @game_state = 0
-    @start = nil
-    @end = nil
-    @creator = creator
-    @casual = casual
-    @full_deck = CardStack.new
-    @full_deck.fill
-    @notifier = notifier || Uno::ConsoleNotifier.new
-    @repository = repository || Uno::NullRepository.new
-    @game_id = @repository.create_game(creator, Time.now.strftime('%F %T'))
-  end
-  
-  def add_player(p)
-    if @locked == false
-      @players.push p
-      @players.shuffle!
-      notify "#{p} joins the game"
-    else
-      notify "Sorry, it's not possible to join this game anymore."
-    end
-  end
-  
-  def start_game
-    if @players.length < 2
-      notify 'You need at least two players to start a game.'
-      return
-    end
-    @game_state = 1
-    @card_stack = @full_deck.clone
-    prepare_card_stack
-    @played_cards = CardStack.new
-    top_card = @card_stack.pick(1)[0]
-    @top_card = top_card
-    @players.shuffle!
-    deal_cards_to_players
-    notify "Game started! Top card: #{@top_card.to_s}"
-  end
-  
-  def prepare_card_stack
-    loop do
-      @card_stack.shuffle!
-      break unless @card_stack[0].is_offensive?
-    end
-  end
-  
-  def deal_cards_to_players
-    @players.each do |p|
-      cards = @card_stack.pick(7)
-      p.hand << cards
-      notify_player(p, "Your cards: #{p.hand.to_s}")
-    end
-  end
-  
-  def notify(text)
-    @notifier.notify_game(text)
-  end
-  
-  def notify_player(p, text)
-    @notifier.notify_player(p.to_s, text)
-  end
-end
-
 RSpec.describe "Notifier integration" do
   describe "UnoGame with NullNotifier" do
     let(:notifier) { Uno::NullNotifier.new }
-    let(:game) { UnoGameWithoutThreadSafety.new('TestCreator', 1, notifier, Uno::NullRepository.new) }
+    let(:game) { UnoGame.new('TestCreator', 1, notifier, nil, Uno::NullRepository.new) }
     let(:alice) { UnoPlayer.new('Alice') }
     let(:bob) { UnoPlayer.new('Bob') }
     
@@ -106,7 +29,8 @@ RSpec.describe "Notifier integration" do
       player_msgs = notifier.player_notifications
       expect(player_msgs).not_to be_empty
       expect(player_msgs.first[:player_id]).to match(/Alice|Bob/)
-      expect(player_msgs.first[:message]).to include("Your cards:")  # Card display
+      # Check for card display in rendered format
+      expect(player_msgs.first[:message]).to match(/\w+\d+|\[\w+\]/)  # Card display
     end
     
     it "handles game flow with notifier" do
@@ -117,10 +41,9 @@ RSpec.describe "Notifier integration" do
       
       game.start_game
       
-      # Should have notifications about game start
-      start_notification = notifier.game_notifications.find { |n| n.include?("Game started") }
+      # Should have notifications about game start - check for actual game start message format
+      start_notification = notifier.game_notifications.find { |n| n.include?("turn") && n.include?("Top card:") }
       expect(start_notification).not_to be_nil
-      expect(start_notification).to include("Top card:")
     end
   end
   

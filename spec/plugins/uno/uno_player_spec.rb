@@ -5,7 +5,7 @@ RSpec.describe UnoPlayer do
   
   describe '#initialize' do
     it 'creates a player with a nick' do
-      expect(player.nick).to eq('Alice')
+      expect(player.identity.display_name).to eq('Alice')
     end
     
     it 'initializes with empty hand' do
@@ -19,13 +19,13 @@ RSpec.describe UnoPlayer do
     end
   end
   
-  describe '#nick' do
-    it 'is read-only from outside' do
-      expect { player.nick = 'Bob' }.to raise_error(NoMethodError)
+  describe 'identity' do
+    it 'has a display name that is read-only from outside' do
+      expect { player.identity.display_name = 'Bob' }.to raise_error(NoMethodError)
     end
     
-    it 'returns the player nick' do
-      expect(player.nick).to eq('Alice')
+    it 'returns the player display name' do
+      expect(player.identity.display_name).to eq('Alice')
     end
   end
   
@@ -50,14 +50,14 @@ RSpec.describe UnoPlayer do
     end
   end
   
-  describe '#change_nick' do
-    it 'changes the player nick' do
-      player.change_nick('Bob')
-      expect(player.nick).to eq('Bob')
+  describe 'nick changes through identity' do
+    it 'changes the player display name' do
+      player.identity.update_display_name('Bob')
+      expect(player.identity.display_name).to eq('Bob')
     end
     
     it 'updates string representation' do
-      player.change_nick('Charlie')
+      player.identity.update_display_name('Charlie')
       expect(player.to_s).to eq('Charlie')
     end
   end
@@ -83,7 +83,7 @@ RSpec.describe UnoPlayer do
     
     it 'is not affected by nick changes' do
       alice_changed = UnoPlayer.new('Alice')
-      alice_changed.change_nick('NotAlice')
+      alice_changed.identity.update_display_name('NotAlice')
       expect(alice1).not_to eq(alice_changed)
     end
   end
@@ -121,7 +121,7 @@ RSpec.describe UnoPlayer do
       players << UnoPlayer.new('Alice')
       players << UnoPlayer.new('Bob')
       
-      expect(players.map(&:nick)).to eq(['Alice', 'Bob'])
+      expect(players.map { |p| p.identity.display_name }).to eq(['Alice', 'Bob'])
       expect(players.map(&:to_s)).to eq(['Alice', 'Bob'])
     end
     
@@ -132,9 +132,9 @@ RSpec.describe UnoPlayer do
         UnoPlayer.new('Charlie')
       ]
       
-      bob = players.find { |p| p.nick == 'Bob' }
+      bob = players.find { |p| p.identity.display_name == 'Bob' }
       expect(bob).not_to be_nil
-      expect(bob.nick).to eq('Bob')
+      expect(bob.identity.display_name).to eq('Bob')
     end
     
     it 'supports nick-based comparison in arrays' do

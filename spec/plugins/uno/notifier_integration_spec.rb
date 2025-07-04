@@ -1,19 +1,12 @@
 require 'spec_helper'
-require_relative '../../../extensions/thread_safe'
-require_relative '../../../plugins/uno/misc'
-require_relative '../../../plugins/uno/uno'
-require_relative '../../../plugins/uno/uno_card'
-require_relative '../../../plugins/uno/uno_hand'
-require_relative '../../../plugins/uno/uno_card_stack'
-require_relative '../../../plugins/uno/uno_player'
-require_relative '../../../plugins/uno/uno_game'
+require 'jedna'
 
 RSpec.describe "Notifier integration" do
   describe "UnoGame with NullNotifier" do
-    let(:notifier) { Uno::NullNotifier.new }
-    let(:game) { UnoGame.new('TestCreator', 1, notifier, nil, Uno::NullRepository.new) }
-    let(:alice) { UnoPlayer.new('Alice') }
-    let(:bob) { UnoPlayer.new('Bob') }
+    let(:notifier) { Jedna::NullNotifier.new }
+    let(:game) { Jedna::Game.new('TestCreator', 1, notifier, nil, Jedna::NullRepository.new) }
+    let(:alice) { Jedna::Player.new('Alice') }
+    let(:bob) { Jedna::Player.new('Bob') }
     
     it "captures game notifications" do
       game.add_player(alice)
@@ -49,9 +42,9 @@ RSpec.describe "Notifier integration" do
   
   describe "UnoGame with different notifiers" do
     it "can be created with console notifier" do
-      game = UnoGame.new('TestCreator', 1, Uno::ConsoleNotifier.new)
-      expect(game).to be_a(UnoGame)
-      expect(game.notifier).to be_a(Uno::ConsoleNotifier)
+      game = Jedna::Game.new('TestCreator', 1, Jedna::ConsoleNotifier.new)
+      expect(game).to be_a(Jedna::Game)
+      expect(game.notifier).to be_a(Jedna::ConsoleNotifier)
     end
   end
 end

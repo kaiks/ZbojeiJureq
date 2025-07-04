@@ -21,6 +21,9 @@ end
 
 gem 'sequel'
 
+# Game engine gem
+gem 'jedna', github: 'kaiks/jedna'
+
 # Ruby 3.4+ extracted standard libraries
 gem 'base64' if RUBY_VERSION >= '3.4'
 gem 'net-ftp' if RUBY_VERSION >= '3.1'

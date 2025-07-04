@@ -1,15 +1,13 @@
 require 'spec_helper'
-require_relative '../../../plugins/uno/interfaces/notifier'
-require_relative '../../../plugins/uno/interfaces/renderer'
-require_relative '../../../plugins/uno/interfaces/repository'
+require 'jedna'
 
 # Mock IRC game for testing
-class TestUnoGame < UnoGame
+class TestUnoGame < Jedna::Game
   attr_reader :test_notifier, :test_repository
   
   def initialize(creator, casual = 0)
-    @test_notifier = Uno::NullNotifier.new
-    @test_repository = Uno::NullRepository.new
+    @test_notifier = Jedna::NullNotifier.new
+    @test_repository = Jedna::NullRepository.new
     super(creator, casual, @test_notifier, nil, @test_repository)
   end
   

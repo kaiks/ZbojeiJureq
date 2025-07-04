@@ -372,7 +372,9 @@ class UnoGame
     if @casual != 1
       db_update_after_game_ended
       player_stats = @repository.get_player_stats(@players[0].to_s)
-      winning_string += " For a total of #{player_stats[:total_score]}, and a total of #{player_stats[:games]} games played."
+      total_score = player_stats[:total_score].to_i
+      games_played = player_stats[:games].to_i
+      winning_string += " For a total of #{total_score}, and a total of #{games_played} games played."
     end
     notify winning_string
     

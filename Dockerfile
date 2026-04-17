@@ -1,17 +1,17 @@
-# see https://github.com/evilmartians/fullstaq-ruby-docker
-ARG RUBY_VERSION=3.4.4-jemalloc-bookworm
+ARG RUBY_VERSION=4.0.2-slim-bookworm
 
-FROM quay.io/evl.ms/fullstaq-ruby:${RUBY_VERSION}-slim
+FROM ruby:${RUBY_VERSION}
 
 RUN apt-get update -q \
    && apt-get install --assume-yes -q --no-install-recommends \
      curl \
      nano \
      build-essential \
+     pkg-config \
      libsqlite3-dev \
      git
 
-ENV APP_HOME /ZbojeiJureq
+ENV APP_HOME=/ZbojeiJureq
 RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 
@@ -20,6 +20,7 @@ ADD . .
 RUN apt-get update -q \
    && apt-get install --assume-yes -q --no-install-recommends \
      ./tools/ripgrep_14.1.1-1_amd64.deb
-RUN gem install bundler -v 2.4.22
-RUN bundle install
-CMD ruby main.rb
+RUN gem install bundler -v 2.3.7
+RUN bundle _2.3.7_ config set build.sqlite3 --enable-system-libraries \
+   && bundle _2.3.7_ install
+CMD ["ruby", "main.rb"]

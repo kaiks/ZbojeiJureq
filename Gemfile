@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-ruby '>= 3.2'
+ruby '4.0.2'
 
 # Use Cinch fork directly from GitHub
 gem 'cinch', git: 'https://github.com/blolol/cinch.git'
@@ -24,9 +24,10 @@ gem 'sequel'
 # Game engine gem
 gem 'jedna', github: 'kaiks/jedna'
 
-# Ruby 3.4+ extracted standard libraries
+# Extracted standard libraries required on current Ruby versions
 gem 'base64' if RUBY_VERSION >= '3.4'
 gem 'net-ftp' if RUBY_VERSION >= '3.1'
+gem 'ostruct' if RUBY_VERSION >= '4.0'
 
 #Plugins:
 gem 'cinch-identify'

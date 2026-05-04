@@ -12,8 +12,9 @@ class FirstMessageSpamFilterPlugin
 
   def initialize(*args)
     super
-    @new_users = {}  # Track users who just joined: {nick => time}
-    @checked_users = Set.new  # Users we've already checked
+    @new_users = {}           # Track users who just joined: {nick => time}
+    @user_spam_scores = Hash.new(0)  # Accumulate spam score: {nick => score}
+    @mutex = Mutex.new        # Protect shared state from Cinch's threaded dispatch
   end
 
   # Spam patterns - detects first-message recruiter/scam spam
@@ -71,12 +72,15 @@ class FirstMessageSpamFilterPlugin
   def track_join(m)
     # Only track in channels (not private messages)
     return unless m.channel
+    # Don't track the bot itself
+    return if m.user == bot
 
-    # Track newly joined users (nick -> timestamp)
-    @new_users[m.user.nick] = Time.now
-    
-    # Cleanup old entries
-    cleanup_old_entries
+    @mutex.synchronize do
+      # Track newly joined users (nick -> timestamp)
+      @new_users[m.user.nick] = Time.now
+      # Cleanup old entries
+      cleanup_old_entries
+    end
   end
 
   def check_first_message(m)
@@ -84,30 +88,32 @@ class FirstMessageSpamFilterPlugin
     return unless m.channel
 
     user_nick = m.user.nick
+    should_ban = false
 
-    # Check if this is a newly joined user
-    return unless @new_users.key?(user_nick)
+    @mutex.synchronize do
+      # Check if this is a recently joined user
+      next unless @new_users.key?(user_nick)
 
-    # Skip if we already checked this user
-    return if @checked_users.include?(user_nick)
+      # Accumulate spam score for this user based on their message
+      score = matching_patterns(m.message)
+      @user_spam_scores[user_nick] += score if score > 0
 
-    # Mark as checked
-    @checked_users.add(user_nick)
-
-    # Remove from new users list
-    @new_users.delete(user_nick)
-
-    # Check if message matches spam patterns
-    if spam_detected?(m.message)
-      handle_spam(m)
+      # Check if accumulated score meets or exceeds threshold
+      if @user_spam_scores[user_nick] >= SPAM_CONFIDENCE_THRESHOLD
+        # Remove tracking immediately to prevent duplicate bans from parallel threads
+        @new_users.delete(user_nick)
+        @user_spam_scores.delete(user_nick)
+        should_ban = true
+      end
     end
+
+    handle_spam(m) if should_ban
   end
 
   private
 
-  def spam_detected?(message)
-    matching_patterns = SPAM_PATTERNS.count { |pattern| message.match?(pattern) }
-    matching_patterns >= SPAM_CONFIDENCE_THRESHOLD
+  def matching_patterns(message)
+    SPAM_PATTERNS.count { |pattern| message.match?(pattern) }
   end
 
   def handle_spam(m)
@@ -118,20 +124,20 @@ class FirstMessageSpamFilterPlugin
     # Log the action
     puts "🚨 SPAM DETECTED from #{user.nick} (#{user.mask}): #{message[0..150]}..."
 
-    # Kick the user
-    begin
-      channel.kick(user, "Spam detected on first message")
-    rescue => e
-      puts "⚠️  Error kicking user #{user.nick}: #{e.message}"
-    end
-
-    # Ban the user via IRC MODE command
+    # Ban the user via Cinch Channel method
     user_mask = generate_ban_mask(user)
     begin
-      @bot.send("MODE #{channel} +b #{user_mask}")
+      channel.ban(user_mask)
       puts "✓ Banned #{user_mask} from #{channel}"
     rescue => e
       puts "⚠️  Error banning user: #{e.message}"
+    end
+
+    # Kick the user (after ban to prevent immediate rejoin)
+    begin
+      channel.kick(user, "Spam detected (automated ban)")
+    rescue => e
+      puts "⚠️  Error kicking user #{user.nick}: #{e.message}"
     end
   end
 
@@ -151,9 +157,12 @@ class FirstMessageSpamFilterPlugin
 
   def cleanup_old_entries
     # Remove entries older than TRACKING_TIMEOUT
+    # NOTE: called from within @mutex.synchronize in track_join
     now = Time.now
-    @new_users.each do |nick, time|
-      @new_users.delete(nick) if (now - time) > TRACKING_TIMEOUT
+    expired = @new_users.select { |_nick, time| (now - time) > TRACKING_TIMEOUT }.keys
+    expired.each do |nick|
+      @new_users.delete(nick)
+      @user_spam_scores.delete(nick)
     end
   end
 end

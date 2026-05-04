@@ -18,6 +18,8 @@ RSpec.describe FirstMessageSpamFilterPlugin do
     'Home Address:  Comrie, 8 Southampton Road, Fareham, Hampshire, United Kingdom, PO16 7DY'
   ].freeze
 
+  JOIN_RACE_MESSAGE = "Hi Guys! It's Madeleine Czura! Just thought I'd leave my number here in case you're lonely ;) . You can reach me on +44-7599248843 or maddyczura@gmail.com or madeleine.czura@arcadis.com anytime! > Linkedin: uk.linkedin.com/in/maddy-czura Instagram: instagram.com/maddy_czura".freeze
+
   FakeUser = Struct.new(:nick, :mask)
   FakeMessage = Struct.new(:user, :channel, :message)
   FakeBot = Struct.new(:nick)
@@ -73,12 +75,17 @@ RSpec.describe FirstMessageSpamFilterPlugin do
       expect(detected).to be(true)
     end
 
+    it 'still flags a suspicious first message if the join callback loses the race' do
+      detected = detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: current_time)
+
+      expect(detected).to be(true)
+    end
+
     it 'tracks joins per channel instead of by nick alone' do
       detector.track_join('#other', user_key, at: current_time)
+      expect(detector.spam_detected?('#other', user_key, SPAM_TRANSCRIPT.first, at: current_time)).to be(false)
 
-      detected = SPAM_TRANSCRIPT.any? do |line|
-        detector.spam_detected?('#kx', user_key, line, at: current_time)
-      end
+      detected = detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: current_time)
 
       expect(detected).to be(false)
     end
@@ -128,6 +135,13 @@ RSpec.describe FirstMessageSpamFilterPlugin do
       expect(channel.bans).to eq(['*!*@vpn.example'])
       expect(channel.kicks).to eq([['advisorybirdMar', 'Spam detected (automated ban)']])
       expect(log_io.string).to include('SPAM DETECTED from advisorybirdMar')
+    end
+
+    it 'still bans when the first message arrives before join tracking completes' do
+      plugin.check_first_message(FakeMessage.new(user, channel, JOIN_RACE_MESSAGE))
+
+      expect(channel.bans).to eq(['*!*@vpn.example'])
+      expect(channel.kicks).to eq([['advisorybirdMar', 'Spam detected (automated ban)']])
     end
 
     it 'does not act on the bot itself joining' do

@@ -80,11 +80,21 @@ class FirstMessageSpamFilterPlugin
         cleanup(at)
 
         key = [channel_key, user_key]
+        signals = SpamSignals.for(message)
         entry = @entries[key]
-        return false unless entry
+        if entry.nil?
+          return false if signals.empty?
+
+          # Cinch dispatches JOIN and PRIVMSG handlers on separate
+          # threads, so the first spam line can arrive before the join
+          # tracker is visible. Create a provisional window from the
+          # first suspicious message so the race does not drop the burst.
+          entry = Entry.new(joined_at: at, messages_seen: 0, signals: Set.new)
+          @entries[key] = entry
+        end
 
         entry.messages_seen += 1
-        entry.signals.merge(SpamSignals.for(message))
+        entry.signals.merge(signals)
 
         detected = entry.signals.length >= @threshold
         forget(key) if detected || entry.messages_seen >= @max_messages

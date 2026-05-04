@@ -1,168 +1,182 @@
 # frozen_string_literal: true
 
-# FirstMessageSpamFilterPlugin
-# Detects and bans users who post spam messages on their first line after joining
-# Particularly targets the "Madeleine Czura" scam pattern and similar recruitment/spam
+require 'set'
 
+# FirstMessageSpamFilterPlugin
+# Detects and bans users who post characteristic spam bursts immediately
+# after joining a channel.
 class FirstMessageSpamFilterPlugin
   include Cinch::Plugin
+
+  TRACKING_TIMEOUT = 3600
+  MAX_MESSAGES_TO_SCAN = 12
+  SPAM_SIGNAL_THRESHOLD = 3
+
+  SIGNAL_PATTERNS = {
+    target_name: [
+      /madeleine\s+czura/i
+    ],
+    recruiter_pitch: [
+      /just.*thought.*i['’]?d.*leave.*my.*number/i,
+      /you.*can.*reach.*me.*on/i,
+      /feel.*free.*to.*contact/i
+    ],
+    contact_detail: [
+      /\+44-?7\d{9,10}/,
+      /\+\d{1,3}-?\d{7,11}/,
+      /\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i,
+      %r{\b(?:uk\.)?linkedin\.com/\S+}i,
+      %r{\binstagram\.com/\S+}i,
+      %r{\btwitter\.com/\S+}i,
+      %r{\btelegram\.me/\S+}i,
+      %r{\bdiscord(?:app)?\.com/\S+}i
+    ],
+    relative_dump: [
+      /brothers?\s*:/i,
+      /sisters?\s*:/i,
+      /mom\s*:/i,
+      /dad\s*:/i
+    ],
+    address_dump: [
+      /\b(?:business|home|office|street)\s+address\s*:/i,
+      /\b\d+\s+[[:alpha:]].*\b(?:road|street|avenue|lane)\b/i
+    ]
+  }.freeze
 
   listen_to :join,    method: :track_join
   listen_to :channel, method: :check_first_message
 
-  def initialize(*args)
-    super
-    @new_users = {}           # Track users who just joined: {nick => time}
-    @user_spam_scores = Hash.new(0)  # Accumulate spam score: {nick => score}
-    @mutex = Mutex.new        # Protect shared state from Cinch's threaded dispatch
-  end
+  module SpamSignals
+    module_function
 
-  # Spam patterns - detects first-message recruiter/scam spam
-  SPAM_PATTERNS = [
-    # Madeleine Czura pattern
-    /madeleine\s+czura/i,
-    
-    # Generic recruiter patterns
-    /just.*thought.*i'd.*leave.*my.*number/i,
-    /you.*can.*reach.*me.*on/i,
-    /you\s+can\s+reach/i,
-    /feel.*free.*to.*contact/i,
-    
-    # Contact info patterns
-    /linkedin\s*:/i,
-    /instagram\s*:/i,
-    /twitter\s*:/i,
-    /telegram\s*:/i,
-    /skype\s*:/i,
-    /discord\s*:/i,
-    /whatsapp\s*:/i,
-    /email\s*:/i,
-    
-    # Family/personal disclosure (unusual in first message)
-    /brothers?\s*:/i,
-    /sisters?\s*:/i,
-    /mom\s*:/i,
-    /dad\s*:/i,
-    
-    # Address patterns
-    /business.*address/i,
-    /home.*address/i,
-    /office.*address/i,
-    /street.*address/i,
-    
-    # Common scam phone patterns
-    /\+44-?7\d{9,10}/,  # UK phone
-    /\+\d{1,3}-?\d{7,11}/,  # Generic international
-    
-    # Email patterns (unusual as first message)
-    /\S+@\S+\.com/i,
-    /\S+@\S+\.co\.uk/i,
-    
-    # Address keywords
-    /\d+\s+[a-z].*road.*london/i,
-    /comrie.*southampton.*road/i,
-  ].freeze
-
-  # If a message matches this many patterns, it's considered spam
-  SPAM_CONFIDENCE_THRESHOLD = 2
-
-  # Clean up old tracking entries after this many seconds
-  TRACKING_TIMEOUT = 3600  # 1 hour
-
-  def track_join(m)
-    # Only track in channels (not private messages)
-    return unless m.channel
-    # Don't track the bot itself
-    return if m.user == bot
-
-    @mutex.synchronize do
-      # Track newly joined users (nick -> timestamp)
-      @new_users[m.user.nick] = Time.now
-      # Cleanup old entries
-      cleanup_old_entries
+    def for(message)
+      SIGNAL_PATTERNS.each_with_object(Set.new) do |(signal, patterns), hits|
+        hits << signal if patterns.any? { |pattern| message.match?(pattern) }
+      end
     end
   end
 
-  def check_first_message(m)
-    # Only check channel messages
-    return unless m.channel
+  class DetectionWindow
+    Entry = Struct.new(:joined_at, :messages_seen, :signals, keyword_init: true)
 
-    user_nick = m.user.nick
-    should_ban = false
+    def initialize(clock: -> { Time.now }, timeout: TRACKING_TIMEOUT, max_messages: MAX_MESSAGES_TO_SCAN, threshold: SPAM_SIGNAL_THRESHOLD)
+      @clock = clock
+      @timeout = timeout
+      @max_messages = max_messages
+      @threshold = threshold
+      @entries = {}
+      @mutex = Mutex.new
+    end
 
-    @mutex.synchronize do
-      # Check if this is a recently joined user
-      next unless @new_users.key?(user_nick)
-
-      # Accumulate spam score for this user based on their message
-      score = matching_patterns(m.message)
-      @user_spam_scores[user_nick] += score if score > 0
-
-      # Check if accumulated score meets or exceeds threshold
-      if @user_spam_scores[user_nick] >= SPAM_CONFIDENCE_THRESHOLD
-        # Remove tracking immediately to prevent duplicate bans from parallel threads
-        @new_users.delete(user_nick)
-        @user_spam_scores.delete(user_nick)
-        should_ban = true
+    def track_join(channel_key, user_key, at: @clock.call)
+      @mutex.synchronize do
+        cleanup(at)
+        @entries[[channel_key, user_key]] = Entry.new(joined_at: at, messages_seen: 0, signals: Set.new)
       end
     end
 
-    handle_spam(m) if should_ban
+    def spam_detected?(channel_key, user_key, message, at: @clock.call)
+      @mutex.synchronize do
+        cleanup(at)
+
+        key = [channel_key, user_key]
+        entry = @entries[key]
+        return false unless entry
+
+        entry.messages_seen += 1
+        entry.signals.merge(SpamSignals.for(message))
+
+        detected = entry.signals.length >= @threshold
+        forget(key) if detected || entry.messages_seen >= @max_messages
+        detected
+      end
+    end
+
+    private
+
+    def cleanup(now)
+      expired_keys = @entries.select { |_key, entry| (now - entry.joined_at) > @timeout }.keys
+      expired_keys.each { |key| forget(key) }
+    end
+
+    def forget(key)
+      @entries.delete(key)
+    end
+  end
+
+  class ChannelModerator
+    def initialize(log_io: $stdout)
+      @log_io = log_io
+    end
+
+    def ban_and_kick(message)
+      user = message.user
+      channel = message.channel
+      user_mask = generate_ban_mask(user)
+
+      log("SPAM DETECTED from #{user.nick} (#{user.mask}): #{message.message[0..150]}...")
+
+      begin
+        channel.ban(user_mask)
+        log("Banned #{user_mask} from #{channel}")
+      rescue StandardError => e
+        log("Error banning user: #{e.message}")
+      end
+
+      begin
+        channel.kick(user, 'Spam detected (automated ban)')
+      rescue StandardError => e
+        log("Error kicking user #{user.nick}: #{e.message}")
+      end
+    end
+
+    def generate_ban_mask(user)
+      nick_and_user, host = user.mask.to_s.split('@', 2)
+      return "*!*@#{host}" if nick_and_user && host && !host.empty?
+
+      user.mask
+    end
+
+    private
+
+    def log(text)
+      @log_io.puts(text)
+    end
+  end
+
+  def initialize(*args)
+    super
+    @detector = DetectionWindow.new
+    @moderator = ChannelModerator.new
+  end
+
+  def track_join(m)
+    return unless m.channel
+    return if bot_user?(m.user)
+
+    @detector.track_join(channel_key(m.channel), user_key(m.user))
+  end
+
+  def check_first_message(m)
+    return unless m.channel
+
+    detected = @detector.spam_detected?(channel_key(m.channel), user_key(m.user), m.message)
+    @moderator.ban_and_kick(m) if detected
   end
 
   private
 
-  def matching_patterns(message)
-    SPAM_PATTERNS.count { |pattern| message.match?(pattern) }
+  def channel_key(channel)
+    channel.respond_to?(:name) ? channel.name : channel.to_s
   end
 
-  def handle_spam(m)
-    user = m.user
-    channel = m.channel
-    message = m.message
-
-    # Log the action
-    puts "🚨 SPAM DETECTED from #{user.nick} (#{user.mask}): #{message[0..150]}..."
-
-    # Ban the user via Cinch Channel method
-    user_mask = generate_ban_mask(user)
-    begin
-      channel.ban(user_mask)
-      puts "✓ Banned #{user_mask} from #{channel}"
-    rescue => e
-      puts "⚠️  Error banning user: #{e.message}"
-    end
-
-    # Kick the user (after ban to prevent immediate rejoin)
-    begin
-      channel.kick(user, "Spam detected (automated ban)")
-    rescue => e
-      puts "⚠️  Error kicking user #{user.nick}: #{e.message}"
-    end
+  def user_key(user)
+    user.respond_to?(:mask) && !user.mask.to_s.empty? ? user.mask : user.nick
   end
 
-  def generate_ban_mask(user)
-    # Generate a ban mask: *!*@host
-    # This bans all users from the same host
-    # Format: nick!user@host
-    parts = user.mask.split('@')
-    if parts.length == 2
-      host = parts[1]
-      "*!*@#{host}"
-    else
-      # Fallback: ban by nick
-      user.mask
-    end
-  end
+  def bot_user?(user)
+    return false unless bot
 
-  def cleanup_old_entries
-    # Remove entries older than TRACKING_TIMEOUT
-    # NOTE: called from within @mutex.synchronize in track_join
-    now = Time.now
-    expired = @new_users.select { |_nick, time| (now - time) > TRACKING_TIMEOUT }.keys
-    expired.each do |nick|
-      @new_users.delete(nick)
-      @user_spam_scores.delete(nick)
-    end
+    user == bot || (user.respond_to?(:nick) && bot.respond_to?(:nick) && user.nick == bot.nick)
   end
 end

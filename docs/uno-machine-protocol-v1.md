@@ -31,12 +31,13 @@ requires joining/renaming in the ordinary game flow and registering again.
 
 ## Tokens and framing
 
-`game`, `decision`, `code`, `event`, and `action` tokens use 1--64 ASCII
+Every machine-protocol message is at most 400 bytes before the IRC command and
+target prefix. `game`, `decision`, `code`, `event`, and `action` tokens use 1--64 ASCII
 letters, digits, `_`, or `-`. The standalone `-` means no decision exists.
 Machine output is always sent by private IRC NOTICE to the bound nick.
 
 An action-required state is zlib-compressed JSON, URL-safe Base64 without
-padding, then split into 280-character chunks:
+padding, then split into 128-character chunks, with at most 999 parts:
 
 ```text
 UNO_MACHINE_V1 STATE game=<game-id> decision=<decision-id> part=<n>/<total> data=<chunk>
@@ -89,17 +90,20 @@ The JSON is not compressed and must encode this envelope:
 {
   "protocol": "UNO_MACHINE_V1",
   "protocol_version": 1,
-  "game_id": "...",
-  "decision_id": "...",
+  "correlation": "...",
   "action": { "action": "draw" }
 }
 ```
 
-`data` is limited to 384 Base64url characters. The host rejects any larger
-action before decoding it.
+`correlation` is the unpadded Base64url encoding of the first 12 bytes of
+`SHA-256(game_id + NUL + decision_id)`. It detects an action payload copied to
+different outer IDs without repeating two potentially long tokens inside the
+one-line payload. `data` is limited to 220 Base64url characters, and the whole
+ACTION line is limited to 400 bytes. The host rejects an oversized line before
+decoding it.
 
-The inner and outer IDs must match. The canonical action is passed unchanged
-to `Jedna::ActionExecutor`; play supports `card`, `wild_color`, and
+The correlation must match the outer IDs. The canonical action is passed
+unchanged to `Jedna::ActionExecutor`; play supports `card`, `wild_color`, and
 `double_play`, including double wild draw fours.
 
 Success and failure are private single-line frames:
@@ -121,7 +125,8 @@ either creates the next turn decision or ends the game.
 Stable host error codes are `private_only`, `channel_only`, `no_game`,
 `not_allowlisted`, `not_player`, `game_changed`, `registration_taken`,
 `not_registered`, `unknown_game`, `game_ended`, `unauthorized`,
-`stale_decision`, `duplicate_decision`, `out_of_turn`, and `internal_error`.
+`stale_decision`, `duplicate_decision`, `out_of_turn`, `transport_unavailable`,
+and `internal_error`.
 Protocol parsing can additionally return `malformed_action`, `invalid_game_id`,
 `invalid_decision_id`, `action_too_large`, `invalid_base64`, `malformed_json`,
 `unsupported_protocol`, or `correlation_mismatch`. Canonical executor failures
@@ -133,8 +138,26 @@ future code according to its explicit `retry` field rather than guessing.
 
 `on_action_required` captures serializer state and registers a decision inline
 under the game monitor. It only performs a nonblocking enqueue afterward. A
-single bounded worker performs NOTICE delivery without the game monitor,
-global games monitor, or per-channel lifecycle monitor. The host never waits
-for inference or an action. Worker exceptions are isolated. Disconnect clears
-registrations while keeping delivery available for a later reconnect; plugin
-unload drains or terminates the managed worker deterministically.
+single bounded worker exclusively performs NOTICE delivery; the producer
+thread never performs network I/O and does not wait for a blocked NOTICE even
+when it currently owns a game or channel monitor. The worker itself owns none
+of the game monitor, global games monitor, or per-channel lifecycle monitor.
+Delivery may run concurrently while another thread still owns one of those
+monitors; the guarantee is thread separation and nonblocking production, not a
+post-lock scheduling barrier.
+
+ACK and any resulting STATE/EVENT frames are one dispatcher job, preserving
+their order and accepting or rejecting the batch atomically at enqueue time.
+If a STATE or successful-action batch cannot be enqueued because the bounded
+queue is full, the host invalidates the pending decision and clears machine
+registration. No undelivered decision remains actionable. Once delivery has
+drained, the client recovers with `.uno machine register`, which returns an
+authoritative `registration_sync` decision when it is current. Cleanup remains
+logically successful if its best-effort terminal EVENT cannot be queued; its
+registration and decisions stay cleared.
+
+Worker exceptions are isolated. Disconnect clears registrations while keeping
+delivery available for a later reconnect. Plugin unload stops new producers,
+allows already queued jobs to drain within a bounded timeout, and force-stops
+a blocked worker at the deadline without clearing the queue merely to insert a
+stop marker.

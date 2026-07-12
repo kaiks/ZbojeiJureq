@@ -41,9 +41,9 @@ module UnoMachine
   end
 
   Registration = Struct.new(:nick, :player, keyword_init: true)
-  Decision = Struct.new(:id, :reason, :player, :status, :deferred, keyword_init: true)
+  Decision = Struct.new(:id, :reason, :player, :status, :deferred, :cancelled, keyword_init: true)
   Session = Struct.new(
-    :game_id, :channel, :game, :registration, :pending, :decisions, :applying,
+    :game_id, :channel, :game, :registration, :pending, :decisions, :applying, :registration_batch,
     keyword_init: true
   )
 
@@ -77,7 +77,8 @@ module UnoMachine
           registration: nil,
           pending: nil,
           decisions: {},
-          applying: nil
+          applying: nil,
+          registration_batch: nil
         )
         @by_id[game_id] = session
         @by_game[game] = session
@@ -110,6 +111,7 @@ module UnoMachine
         end
 
         candidate.registration = Registration.new(nick: Nick.normalize(nick), player: player)
+        candidate.registration_batch = []
         candidate
       end
       if session == :registration_taken
@@ -117,25 +119,50 @@ module UnoMachine
       end
       return Result.new(success: false, code: 'game_changed', game_id: nil) unless session
 
-      deliver(nick, Protocol.registered_line(game_id: session.game_id, channel: channel))
+      synchronized = true
       game.synchronize do
-        action_required(game, player, :registration_sync) if game.started? && game.players.first.equal?(player)
+        if game.started? && game.players.first.equal?(player)
+          synchronized = action_required(game, player, :registration_sync)
+        end
       end
+      synchronized_frames, registration_current = @mutex.synchronize do
+        frames = session.registration_batch
+        session.registration_batch = nil
+        current = @by_id[session.game_id].equal?(session) &&
+                  session.registration&.player.equal?(player) &&
+                  session.registration&.nick == Nick.normalize(nick)
+        [frames, current]
+      end
+      unless synchronized && registration_current
+        return Result.new(success: false, code: 'transport_unavailable', game_id: session.game_id)
+      end
+
+      registration_frames = [
+        [nick, Protocol.registered_line(game_id: session.game_id, channel: channel)],
+        *synchronized_frames
+      ]
+      unless deliver_batch(registration_frames)
+        @mutex.synchronize { clear_registration(session) if session.registration&.player.equal?(player) }
+        return Result.new(success: false, code: 'transport_unavailable', game_id: session.game_id)
+      end
+
       Result.new(success: true, code: 'ok', game_id: session.game_id)
     end
 
     def unregister(channel:, game:, nick:, event: 'unregistered')
+      removed = false
       delivery = @mutex.synchronize do
         session = @by_game[game]
         registration = session&.registration
         next unless session && session.channel == channel && registration&.nick == Nick.normalize(nick)
 
+        removed = true
         decision_id = session.pending&.id
         clear_registration(session)
         terminal_delivery(session, registration, event, {}, decision_id: decision_id)
       end
       deliver(*delivery) if delivery
-      !!delivery
+      removed
     end
 
     # Called inline by Jedna while the game's monitor is owned.
@@ -157,26 +184,40 @@ module UnoMachine
           reason: reason,
           player: player,
           status: :pending,
-          deferred: []
+          deferred: [],
+          cancelled: false
         )
+        begin
+          lines = Protocol.state_lines(
+            game_id: session.game_id,
+            decision_id: decision.id,
+            reason: reason,
+            request: request
+          )
+        rescue Protocol::ProtocolError
+          clear_registration(session)
+          next :encoding_failed
+        end
         session.pending = decision
         session.decisions[decision.id] = decision
         trim_history(session)
-        lines = Protocol.state_lines(
-          game_id: session.game_id,
-          decision_id: decision.id,
-          reason: reason,
-          request: request
-        )
         item = [player.to_s, lines]
-        if session.applying
+        if session.registration_batch
+          session.registration_batch << item
+          nil
+        elsif session.applying
           session.applying.deferred << item
           nil
         else
-          item
+          [player.to_s, lines, session, decision]
         end
       end
-      deliver(*delivery) if delivery
+      return false if delivery == :encoding_failed
+      return true unless delivery
+
+      queued = deliver(delivery[0], delivery[1])
+      fail_state_delivery(delivery[2], delivery[3]) unless queued
+      queued
     end
 
     def submit(sender:, game_id:, decision_id:, action:)
@@ -203,9 +244,11 @@ module UnoMachine
               session.pending = nil if session.pending.equal?(decision)
               outcome = [:ack, result.action, false]
             else
-              decision.status = :pending
-              session.pending = decision if @by_id[game_id].equal?(session)
-              outcome = [:error, result.code, true]
+              retryable = !decision.cancelled && session.registration&.player.equal?(decision.player) &&
+                          @by_id[game_id].equal?(session)
+              decision.status = retryable ? :pending : :cancelled
+              session.pending = decision if retryable
+              outcome = [:error, result.code, retryable]
             end
             session.applying = nil if session.applying.equal?(decision)
             deferred = decision.deferred.dup
@@ -221,12 +264,21 @@ module UnoMachine
         end
       end
 
-      if outcome.first == :ack
-        deliver(registered_nick, Protocol.ack_line(game_id: game_id, decision_id: decision_id, action: outcome[1]))
-      else
-        error(sender, outcome[1], game_id, decision_id, retryable: outcome[2])
-      end
-      deferred.each { |delivery| deliver(*delivery) }
+      primary = if outcome.first == :ack
+                  [
+                    registered_nick,
+                    Protocol.ack_line(game_id: game_id, decision_id: decision_id, action: outcome[1])
+                  ]
+                else
+                  [
+                    sender,
+                    Protocol.error_line(
+                      code: outcome[1], game_id: game_id, decision_id: decision_id, retryable: outcome[2]
+                    )
+                  ]
+                end
+      queued = deliver_batch([primary, *deferred])
+      suspend_after_delivery_failure(session) unless queued || (outcome.first == :error && outcome[2])
       outcome.first == :ack
     end
 
@@ -241,47 +293,55 @@ module UnoMachine
 
     def cleanup_nick(nick, event:, channel: nil, delivery_nick: nil)
       normalized = Nick.normalize(nick)
-      deliveries = @mutex.synchronize do
-        @by_id.values.filter_map do |session|
+      deliveries = []
+      count = @mutex.synchronize do
+        @by_id.values.count do |session|
           registration = session.registration
           next unless registration&.nick == normalized
           next if channel && session.channel != channel
 
           decision_id = session.pending&.id
           clear_registration(session)
-          terminal_delivery(
+          delivery = terminal_delivery(
             session, registration, event, {}, decision_id: decision_id, delivery_nick: delivery_nick
           )
+          deliveries << delivery if delivery
+          true
         end
       end
       deliveries.each { |delivery| deliver(*delivery) }
-      deliveries.length
+      count
     end
 
     def cleanup_all(event:)
-      deliveries = @mutex.synchronize do
-        @by_id.values.filter_map do |session|
+      deliveries = []
+      count = @mutex.synchronize do
+        @by_id.values.count do |session|
           registration = session.registration
           next unless registration
 
           decision_id = session.pending&.id
           clear_registration(session)
-          terminal_delivery(session, registration, event, {}, decision_id: decision_id)
+          delivery = terminal_delivery(session, registration, event, {}, decision_id: decision_id)
+          deliveries << delivery if delivery
+          true
         end
       end
       deliveries.each { |delivery| deliver(*delivery) }
-      deliveries.length
+      count
     end
 
     def shutdown(event: 'plugin_unloaded')
-      deliveries = @mutex.synchronize do
-        @by_id.values.filter_map do |session|
+      deliveries = []
+      @mutex.synchronize do
+        @by_id.values.each do |session|
           registration = session.registration
           next unless registration
 
           decision_id = session.pending&.id
           clear_registration(session)
-          terminal_delivery(session, registration, event, {}, decision_id: decision_id)
+          delivery = terminal_delivery(session, registration, event, {}, decision_id: decision_id)
+          deliveries << delivery if delivery
         end
       end
       deliveries.each { |delivery| deliver(*delivery) }
@@ -349,8 +409,27 @@ module UnoMachine
     end
 
     def clear_registration(session)
+      session.applying.cancelled = true if session.applying
       replace_pending_decision(session)
       session.registration = nil
+    end
+
+    def fail_state_delivery(session, decision)
+      @mutex.synchronize do
+        next unless @by_id[session.game_id].equal?(session)
+        next unless session.pending.equal?(decision)
+
+        decision.status = :delivery_failed
+        clear_registration(session)
+      end
+    end
+
+    def suspend_after_delivery_failure(session)
+      @mutex.synchronize do
+        next unless @by_id[session.game_id].equal?(session)
+
+        clear_registration(session)
+      end
     end
 
     def trim_history(session)
@@ -376,6 +455,10 @@ module UnoMachine
 
     def deliver(nick, lines)
       @transport.deliver(nick, lines)
+    end
+
+    def deliver_batch(deliveries)
+      @transport.deliver_batch(deliveries)
     end
   end
 end

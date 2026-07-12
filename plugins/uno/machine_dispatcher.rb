@@ -33,15 +33,12 @@ module UnoMachine
         return unless @worker
 
         @stopped = true
-        begin
-          @queue.push(STOP, true)
-        rescue ThreadError
-          @queue.clear
-          @queue << STOP
-        end
         @worker
       end
-      worker.join(timeout)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      stop_enqueued = enqueue_stop_before(deadline)
+      remaining = [deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC), 0].max
+      worker.join(remaining) if stop_enqueued
       worker.kill if worker.alive?
       worker.join
     ensure
@@ -53,6 +50,17 @@ module UnoMachine
     end
 
     private
+
+    def enqueue_stop_before(deadline)
+      loop do
+        @queue.push(STOP, true)
+        return true
+      rescue ThreadError
+        return false if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        Thread.pass
+      end
+    end
 
     def work
       loop do
@@ -78,10 +86,18 @@ module UnoMachine
     end
 
     def deliver(nick, lines)
-      frame = Array(lines).map(&:dup).freeze
+      deliver_batch([[nick, lines]])
+    end
+
+    def deliver_batch(deliveries)
+      batch = deliveries.map do |nick, lines|
+        [nick.to_s.dup.freeze, Array(lines).map { |line| line.to_s.dup.freeze }.freeze]
+      end.freeze
       @dispatcher.enqueue do
-        target = @notice_target.call(nick)
-        frame.each { |line| target.notice(line) }
+        batch.each do |nick, frame|
+          target = @notice_target.call(nick)
+          frame.each { |line| target.notice(line) }
+        end
       end
     end
 

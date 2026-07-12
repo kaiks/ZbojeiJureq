@@ -18,6 +18,11 @@ RSpec.describe UnoMachine::Sessions do
       true
     end
 
+    def deliver_batch(deliveries)
+      deliveries.each { |nick, lines| deliver(nick, lines) }
+      true
+    end
+
     def shutdown(*)
       @shutdown = true
     end
@@ -314,6 +319,9 @@ RSpec.describe UnoMachine::Sessions do
   it 'returns from the action hook without network IO and delivers after the game monitor is released' do
     callback = Queue.new
     delivery = Queue.new
+    state_started = Queue.new
+    release_state = Queue.new
+    blocked_state = false
     monitored_game = game.instance_variable_get(:@__monitor)
     global_monitor = Monitor.new
     channel_monitor = Monitor.new
@@ -329,6 +337,11 @@ RSpec.describe UnoMachine::Sessions do
               global_monitor.mon_owned?,
               channel_monitor.mon_owned?
             ]
+            if line.split[1] == 'STATE' && !blocked_state
+              blocked_state = true
+              state_started << [Thread.current.object_id, line]
+              release_state.pop
+            end
             delivery << true
           end
         end
@@ -342,17 +355,221 @@ RSpec.describe UnoMachine::Sessions do
       async_sessions.action_required(current_game, player, reason)
     end
 
-    started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    channel_monitor.synchronize { game.start_game(nil, 'Alice') }
-    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
+    producer = Thread.new { channel_monitor.synchronize { game.start_game(nil, 'Alice') } }
+    worker_id, = state_started.pop
 
+    expect(producer.join(0.1)).to eq(producer)
+    expect(worker_id).not_to eq(producer.object_id)
+    expect(channel_monitor.try_enter).to be(true)
+    channel_monitor.exit
+    expect { delivery.pop(true) }.to raise_error(ThreadError)
+
+    release_state << true
     delivery.pop
-    expect(elapsed).to be < 0.1
     registration_callback = callback.pop
     state_callback = callback.pop
     expect(registration_callback.drop(1)).to eq([false, false, false])
     expect(state_callback).to eq(['STATE', false, false, false])
   ensure
+    release_state << true if release_state&.empty?
+    producer&.join
     async_transport&.shutdown
+  end
+
+  describe 'bounded delivery saturation' do
+    def saturate(dispatcher)
+      started = Queue.new
+      release = Queue.new
+      filler_done = Queue.new
+      dispatcher.enqueue do
+        started << true
+        release.pop
+      end
+      started.pop
+      dispatcher.enqueue { filler_done << true }
+      [release, filler_done]
+    end
+
+    def async_machine(game, allowlist)
+      notices = Queue.new
+      dispatcher = UnoMachine::Dispatcher.new(capacity: 1)
+      transport = UnoMachine::Transport.new(
+        dispatcher: dispatcher,
+        notice_target: lambda do |nick|
+          Object.new.tap do |target|
+            target.define_singleton_method(:notice) { |line| notices << [nick, line] }
+          end
+        end
+      )
+      sessions = described_class.new(transport: transport, allowlist: allowlist)
+      sessions.attach_game(channel: '#one', game: game)
+      game.on_action_required { |current, player, reason| sessions.action_required(current, player, reason) }
+      [sessions, dispatcher, transport, notices]
+    end
+
+    def pop_frame(notices, kind)
+      lines = []
+      loop do
+        _nick, line = notices.pop
+        next unless line.split[1] == kind
+
+        lines << line
+        part = line.match(/part=(\d+)\/(\d+)/)
+        return lines if part && lines.length == part[2].to_i
+      end
+    end
+
+    it 'invalidates an undelivered state and recovers by re-registering after drain' do
+      sessions, dispatcher, transport, notices = async_machine(game, allowlist)
+      expect(sessions.register(channel: '#one', game: game, nick: 'Alice')).to be_success
+      notices.pop # REGISTERED
+      release, filler_done = saturate(dispatcher)
+
+      game.start_game(nil, 'Alice')
+      session = sessions.instance_variable_get(:@by_game)[game]
+      expect(session.registration).to be_nil
+      expect(session.pending).to be_nil
+
+      release << true
+      filler_done.pop
+      expect(sessions.register(channel: '#one', game: game, nick: 'Alice')).to be_success
+      notices.pop # REGISTERED
+      recovered = UnoMachine::Protocol.reassemble(pop_frame(notices, 'STATE'))
+      expect(recovered['reason']).to eq('registration_sync')
+    ensure
+      release << true if release&.empty?
+      transport&.shutdown
+    end
+
+    it 'drops an overflowing ACK and deferred state as one batch, then resynchronizes' do
+      sessions, dispatcher, transport, notices = async_machine(game, allowlist)
+      sessions.register(channel: '#one', game: game, nick: 'Alice')
+      notices.pop
+      game.start_game(nil, 'Alice')
+      state = UnoMachine::Protocol.reassemble(pop_frame(notices, 'STATE'))
+      release, filler_done = saturate(dispatcher)
+
+      original_size = alice.hand.size
+      expect(sessions.submit(
+        sender: 'Alice', game_id: state['game_id'], decision_id: state['decision_id'], action: { action: 'draw' }
+      )).to be(true)
+      session = sessions.instance_variable_get(:@by_game)[game]
+      expect(alice.hand.size).to eq(original_size + 1)
+      expect(session.registration).to be_nil
+      expect(session.pending).to be_nil
+
+      release << true
+      filler_done.pop
+      expect { notices.pop(true) }.to raise_error(ThreadError)
+      sessions.register(channel: '#one', game: game, nick: 'Alice')
+      notices.pop
+      recovered = UnoMachine::Protocol.reassemble(pop_frame(notices, 'STATE'))
+      expect(recovered['reason']).to eq('registration_sync')
+    ensure
+      release << true if release&.empty?
+      transport&.shutdown
+    end
+
+    it 'cleans terminal state truthfully when its private event cannot be enqueued' do
+      sessions, dispatcher, transport, notices = async_machine(game, allowlist)
+      sessions.register(channel: '#one', game: game, nick: 'Alice')
+      notices.pop
+      release, filler_done = saturate(dispatcher)
+
+      expect(sessions.unregister(channel: '#one', game: game, nick: 'Alice')).to be(true)
+      session = sessions.instance_variable_get(:@by_game)[game]
+      expect(session.registration).to be_nil
+      expect(session.pending).to be_nil
+
+      failed_registration = sessions.register(channel: '#one', game: game, nick: 'Alice')
+      expect(failed_registration.code).to eq('transport_unavailable')
+      expect(session.registration).to be_nil
+
+      release << true
+      filler_done.pop
+      expect { notices.pop(true) }.to raise_error(ThreadError)
+      expect(sessions.register(channel: '#one', game: game, nick: 'Alice')).to be_success
+      expect(notices.pop.last).to include(' REGISTERED ')
+    ensure
+      release << true if release&.empty?
+      transport&.shutdown
+    end
+  end
+
+  describe 'cleanup while an action is applying' do
+    it 'never resurrects decisions and reports cleanup truthfully for success and failure' do
+      %i[success failure].product(%i[unregister cleanup_nick]).each do |result_type, cleanup_type|
+        controlled_game = game_class.new('creator', 1, Jedna::NullNotifier.new)
+        controlled_alice = Jedna::Player.new('Alice')
+        controlled_bob = Jedna::Player.new('Bob')
+        controlled_game.add_player(controlled_alice)
+        controlled_game.add_player(controlled_bob)
+        controlled_game.players.replace([controlled_alice, controlled_bob])
+        controlled_game.instance_variable_set(:@top_card, Jedna::Card.new(:red, 7))
+        controlled_game.instance_variable_set(:@game_state, 1)
+        entered = Queue.new
+        release = Queue.new
+        executor = Class.new do
+          define_method(:initialize) { |entered_queue, release_queue, kind| @values = [entered_queue, release_queue, kind] }
+          define_method(:execute) do |action, player:|
+            entered_queue, release_queue, kind = @values
+            entered_queue << [action, player]
+            release_queue.pop
+            if kind == :success
+              Jedna::ActionResult.success('draw')
+            else
+              Jedna::ActionResult.failure('action_unavailable', 'not now', 'draw')
+            end
+          end
+        end.new(entered, release, result_type)
+        local_transport = RecordingMachineTransport.new
+        local_sessions = described_class.new(
+          transport: local_transport,
+          allowlist: allowlist,
+          executor_factory: ->(_game) { executor }
+        )
+        local_sessions.attach_game(channel: '#one', game: controlled_game)
+        local_sessions.register(channel: '#one', game: controlled_game, nick: 'Alice')
+        controlled_game.synchronize do
+          local_sessions.action_required(controlled_game, controlled_alice, :turn_started)
+        end
+        state = UnoMachine::Protocol.reassemble(local_transport.deliveries.last.last)
+        local_transport.deliveries.clear
+        applying = Thread.new do
+          local_sessions.submit(
+            sender: 'Alice',
+            game_id: state['game_id'],
+            decision_id: state['decision_id'],
+            action: { action: 'draw' }
+          )
+        end
+        entered.pop
+
+        cleaned = if cleanup_type == :unregister
+                    local_sessions.unregister(
+                      channel: '#one', game: controlled_game, nick: 'Alice'
+                    )
+                  else
+                    local_sessions.cleanup_nick('Alice', event: 'quit')
+                  end
+        expect(cleaned).to eq(cleanup_type == :unregister ? true : 1)
+        expect(local_transport.deliveries).to be_empty
+
+        release << true
+        expect { applying.value }.not_to raise_error
+        types = local_transport.deliveries.map { |_, lines| lines.first.split[1] }
+        expect(types).to eq(result_type == :success ? %w[ACK EVENT] : %w[ERROR EVENT])
+        expect(types.count('EVENT')).to eq(1)
+        if result_type == :failure
+          expect(local_transport.deliveries.first.last.first).to include('retry=0')
+        end
+        session = local_sessions.instance_variable_get(:@by_game)[controlled_game]
+        expect(session.registration).to be_nil
+        expect(session.pending).to be_nil
+      ensure
+        release << true if release&.empty?
+        applying&.join
+      end
+    end
   end
 end

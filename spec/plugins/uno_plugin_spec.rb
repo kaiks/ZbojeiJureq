@@ -362,6 +362,18 @@ RSpec.describe UnoPlugin do
       expect(machine_sessions).to receive(:protocol_error).with('Alice', 'no_game')
       plugin.machine_register(double('missing registration', user: user, channel: channel))
     end
+
+    it 'does not contradict a logically successful deferred unregister' do
+      game = instance_double(IrcUnoGame)
+      plugin.instance_variable_get(:@games)['#one'] = game
+      message = double('machine unregister', user: user, channel: channel)
+      expect(machine_sessions).to receive(:unregister).with(
+        channel: '#one', game: game, nick: 'Alice'
+      ).and_return(true)
+      expect(machine_sessions).not_to receive(:protocol_error)
+
+      plugin.machine_unregister(message)
+    end
   end
 
   describe 'channel-scoped game state' do

@@ -60,7 +60,7 @@ RSpec.describe UnoMachine::Dispatcher do
     expect(queued_completed.pop).to be(true)
     expect(dispatcher).to be_stopped
   ensure
-    release << true if release&.empty?
+    release << true if release && release.empty?
     dispatcher&.shutdown
     shutdown&.join
   end

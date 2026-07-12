@@ -5,33 +5,33 @@ require 'jedna'
 require_relative '../../../plugins/uno/machine_dispatcher'
 require_relative '../../../plugins/uno/machine_sessions'
 
-RSpec.describe UnoMachine::Sessions do
-  class RecordingMachineTransport
-    attr_reader :deliveries
+class RecordingMachineTransport
+  attr_reader :deliveries
 
-    def initialize
-      @deliveries = []
-    end
-
-    def deliver(nick, lines)
-      @deliveries << [nick, Array(lines)]
-      true
-    end
-
-    def deliver_batch(deliveries)
-      deliveries.each { |nick, lines| deliver(nick, lines) }
-      true
-    end
-
-    def shutdown(*)
-      @shutdown = true
-    end
-
-    def shutdown?
-      @shutdown
-    end
+  def initialize
+    @deliveries = []
   end
 
+  def deliver(nick, lines)
+    @deliveries << [nick, Array(lines)]
+    true
+  end
+
+  def deliver_batch(deliveries)
+    deliveries.each { |nick, lines| deliver(nick, lines) }
+    true
+  end
+
+  def shutdown(*)
+    @shutdown = true
+  end
+
+  def shutdown?
+    @shutdown
+  end
+end
+
+RSpec.describe UnoMachine::Sessions do
   let(:transport) { RecordingMachineTransport.new }
   let(:allowlist) { UnoMachine::Allowlist.new(%w[ALICE Carol]) }
   let(:random_values) { Enumerator.new { |values| index = 0; loop { values << "secret#{index += 1}" } } }
@@ -371,7 +371,7 @@ RSpec.describe UnoMachine::Sessions do
     expect(registration_callback.drop(1)).to eq([false, false, false])
     expect(state_callback).to eq(['STATE', false, false, false])
   ensure
-    release_state << true if release_state&.empty?
+    release_state << true if release_state && release_state.empty?
     producer&.join
     async_transport&.shutdown
   end
@@ -437,7 +437,7 @@ RSpec.describe UnoMachine::Sessions do
       recovered = UnoMachine::Protocol.reassemble(pop_frame(notices, 'STATE'))
       expect(recovered['reason']).to eq('registration_sync')
     ensure
-      release << true if release&.empty?
+      release << true if release && release.empty?
       transport&.shutdown
     end
 
@@ -466,7 +466,7 @@ RSpec.describe UnoMachine::Sessions do
       recovered = UnoMachine::Protocol.reassemble(pop_frame(notices, 'STATE'))
       expect(recovered['reason']).to eq('registration_sync')
     ensure
-      release << true if release&.empty?
+      release << true if release && release.empty?
       transport&.shutdown
     end
 
@@ -491,7 +491,7 @@ RSpec.describe UnoMachine::Sessions do
       expect(sessions.register(channel: '#one', game: game, nick: 'Alice')).to be_success
       expect(notices.pop.last).to include(' REGISTERED ')
     ensure
-      release << true if release&.empty?
+      release << true if release && release.empty?
       transport&.shutdown
     end
   end
@@ -567,7 +567,7 @@ RSpec.describe UnoMachine::Sessions do
         expect(session.registration).to be_nil
         expect(session.pending).to be_nil
       ensure
-        release << true if release&.empty?
+        release << true if release && release.empty?
         applying&.join
       end
     end

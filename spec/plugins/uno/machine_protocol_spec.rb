@@ -98,5 +98,9 @@ RSpec.describe UnoMachine::Protocol do
     expect(described_class.reassemble(lines)).to include(
       'type' => 'event', 'event' => 'game_ended', 'game_id' => 'g1', 'decision_id' => 'd4'
     )
+
+    expect do
+      described_class.event_lines(game_id: 'g1', decision_id: 'd4', event: 'bad event')
+    end.to raise_error(UnoMachine::Protocol::ProtocolError) { |error| expect(error.code).to eq('invalid_event') }
   end
 end

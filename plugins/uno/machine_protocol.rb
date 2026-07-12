@@ -136,6 +136,7 @@ module UnoMachine
     def chunked_lines(kind, game_id:, decision_id:, payload:, event: nil)
       validate_token!(game_id, 'invalid_game_id')
       validate_token!(decision_id, 'invalid_decision_id') unless decision_id == '-'
+      validate_token!(event, 'invalid_event') if event
       data = encode_uncompressed(Zlib::Deflate.deflate(JSON.generate(payload)))
       chunks = data.scan(/.{1,#{CHUNK_BYTES}}/)
       chunks.each_with_index.map do |chunk, index|
@@ -157,6 +158,7 @@ module UnoMachine
       kind, game_id, decision_id, event, part, total, data = match.captures
       validate_token!(game_id, 'invalid_game_id')
       validate_token!(decision_id, 'invalid_decision_id') unless decision_id == '-'
+      validate_token!(event, 'invalid_event') if event
       raise ProtocolError.new('malformed_chunk') if kind == 'EVENT' && event.nil?
       raise ProtocolError.new('malformed_chunk') if kind == 'STATE' && event
 

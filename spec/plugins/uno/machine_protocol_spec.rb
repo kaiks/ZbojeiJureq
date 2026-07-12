@@ -23,7 +23,7 @@ RSpec.describe UnoMachine::Protocol do
     shuffled = (lines.reverse + [lines.first]).shuffle(random: Random.new(4))
 
     expect(lines.length).to be > 1
-    expect(lines.map(&:bytesize).max).to be < 420
+    expect(lines.map(&:bytesize).max).to be <= described_class::MAX_WIRE_BYTES
     expect(described_class.reassemble(shuffled)).to include(
       'protocol' => 'UNO_MACHINE_V1',
       'game_id' => 'g1_secret',
@@ -102,5 +102,35 @@ RSpec.describe UnoMachine::Protocol do
     expect do
       described_class.event_lines(game_id: 'g1', decision_id: 'd4', event: 'bad event')
     end.to raise_error(UnoMachine::Protocol::ProtocolError) { |error| expect(error.code).to eq('invalid_event') }
+  end
+
+  it 'keeps every frame within the wire limit with worst-case tokens' do
+    game_id = 'g' * 64
+    decision_id = 'd' * 64
+    event = 'e' * 64
+    action = { action: 'play', card: 'wd4', wild_color: 'yellow', double_play: true }
+    lines = described_class.state_lines(
+      game_id: game_id, decision_id: decision_id, reason: :turn_started, request: request
+    )
+    lines.concat(
+      described_class.event_lines(
+        game_id: game_id, decision_id: decision_id, event: event, payload: { winner: 'Alice' }
+      )
+    )
+    lines << described_class.ack_line(game_id: game_id, decision_id: decision_id, action: 'play')
+    lines << described_class.error_line(
+      game_id: game_id, decision_id: decision_id, code: 'c' * 64, retryable: false
+    )
+    action_line = described_class.encode_action(
+      game_id: game_id, decision_id: decision_id, action: action
+    )
+    lines << action_line
+
+    expect(lines.map(&:bytesize).max).to be <= described_class::MAX_WIRE_BYTES
+    expect(described_class.parse_action(action_line)[:action]).to eq(JSON.parse(JSON.generate(action)))
+
+    oversized = action_line.sub(/data=.*/, "data=#{'A' * (described_class::MAX_ACTION_DATA_BYTES + 1)}")
+    expect { described_class.parse_action(oversized) }
+      .to raise_error(UnoMachine::Protocol::ProtocolError) { |error| expect(error.code).to eq('action_too_large') }
   end
 end

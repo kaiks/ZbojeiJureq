@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'base64'
+require 'digest'
 require 'json'
 require 'zlib'
 
@@ -9,8 +10,10 @@ module UnoMachine
   module Protocol
     NAME = 'UNO_MACHINE_V1'
     VERSION = 1
-    CHUNK_BYTES = 280
-    MAX_ACTION_DATA_BYTES = 384
+    MAX_WIRE_BYTES = 400
+    CHUNK_BYTES = 128
+    MAX_CHUNKS = 999
+    MAX_ACTION_DATA_BYTES = 220
     TOKEN = /\A[A-Za-z0-9_-]{1,64}\z/
 
     class ProtocolError < StandardError
@@ -54,19 +57,21 @@ module UnoMachine
 
     def registered_line(game_id:, channel:)
       encoded_channel = encode_uncompressed(channel.to_s)
-      "#{NAME} REGISTERED game=#{game_id} channel=#{encoded_channel}"
+      ensure_wire_size!("#{NAME} REGISTERED game=#{game_id} channel=#{encoded_channel}")
     end
 
     def ack_line(game_id:, decision_id:, action:)
-      "#{NAME} ACK game=#{game_id} decision=#{decision_id} status=ok action=#{action}"
+      ensure_wire_size!("#{NAME} ACK game=#{game_id} decision=#{decision_id} status=ok action=#{action}")
     end
 
     def error_line(code:, game_id: '-', decision_id: '-', retryable: false)
       safe_game_id = valid_token?(game_id) ? game_id : '-'
       safe_decision_id = valid_token?(decision_id) ? decision_id : '-'
       safe_code = code.to_s.match?(TOKEN) ? code : 'protocol_error'
-      "#{NAME} ERROR game=#{safe_game_id} decision=#{safe_decision_id} " \
-        "code=#{safe_code} retry=#{retryable ? 1 : 0}"
+      ensure_wire_size!(
+        "#{NAME} ERROR game=#{safe_game_id} decision=#{safe_decision_id} " \
+          "code=#{safe_code} retry=#{retryable ? 1 : 0}"
+      )
     end
 
     def encode_action(game_id:, decision_id:, action:)
@@ -75,17 +80,18 @@ module UnoMachine
       envelope = {
         protocol: NAME,
         protocol_version: VERSION,
-        game_id: game_id,
-        decision_id: decision_id,
+        correlation: action_correlation(game_id, decision_id),
         action: action
       }
       data = encode_uncompressed(JSON.generate(envelope))
       raise ProtocolError.new('action_too_large') if data.bytesize > MAX_ACTION_DATA_BYTES
 
-      "#{NAME} ACTION game=#{game_id} decision=#{decision_id} data=#{data}"
+      ensure_wire_size!("#{NAME} ACTION game=#{game_id} decision=#{decision_id} data=#{data}")
     end
 
     def parse_action(line)
+      raise ProtocolError.new('action_too_large') if line.to_s.bytesize > MAX_WIRE_BYTES
+
       match = line.to_s.match(
         /\A#{NAME} ACTION game=([^ ]+) decision=([^ ]+) data=([^ ]+)\z/
       )
@@ -139,12 +145,14 @@ module UnoMachine
       validate_token!(event, 'invalid_event') if event
       data = encode_uncompressed(Zlib::Deflate.deflate(JSON.generate(payload)))
       chunks = data.scan(/.{1,#{CHUNK_BYTES}}/)
+      raise ProtocolError.new('frame_too_large') if chunks.length > MAX_CHUNKS
+
       chunks.each_with_index.map do |chunk, index|
         fields = [NAME, kind, "game=#{game_id}", "decision=#{decision_id}"]
         fields << "event=#{event}" if event
         fields << "part=#{index + 1}/#{chunks.length}"
         fields << "data=#{chunk}"
-        fields.join(' ')
+        ensure_wire_size!(fields.join(' '))
       end
     end
     private_class_method :chunked_lines
@@ -164,7 +172,7 @@ module UnoMachine
 
       part = Integer(part, 10)
       total = Integer(total, 10)
-      raise ProtocolError.new('invalid_part') if total < 1 || part < 1 || part > total
+      raise ProtocolError.new('invalid_part') if total < 1 || total > MAX_CHUNKS || part < 1 || part > total
 
       {
         kind: kind,
@@ -200,12 +208,25 @@ module UnoMachine
       unless envelope['protocol'] == NAME && envelope['protocol_version'] == VERSION
         raise ProtocolError.new('unsupported_protocol')
       end
-      unless envelope['game_id'] == game_id && envelope['decision_id'] == decision_id
+      unless envelope['correlation'] == action_correlation(game_id, decision_id)
         raise ProtocolError.new('correlation_mismatch')
       end
       raise ProtocolError.new('malformed_action') unless envelope['action'].is_a?(Hash)
     end
     private_class_method :validate_action_envelope!
+
+    def action_correlation(game_id, decision_id)
+      digest = Digest::SHA256.digest("#{game_id}\0#{decision_id}").byteslice(0, 12)
+      Base64.urlsafe_encode64(digest, padding: false)
+    end
+    private_class_method :action_correlation
+
+    def ensure_wire_size!(line)
+      raise ProtocolError.new('frame_too_large') if line.bytesize > MAX_WIRE_BYTES
+
+      line
+    end
+    private_class_method :ensure_wire_size!
 
     def validate_token!(value, code)
       raise ProtocolError.new(code) unless value.to_s.match?(TOKEN)

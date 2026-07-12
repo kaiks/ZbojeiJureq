@@ -68,7 +68,7 @@ class UnoPlugin
   match /^pa$/,         group: :uno, method: :pass, use_prefix: false
   match /^pe$/,         group: :uno, method: :pick, use_prefix: false
   match /^st$/,         group: :uno, method: :get_stack_size, use_prefix: false
-  match /^pl ([A-Za-z0-9+]{1,8})$/, group: :uno, method: :play, use_prefix: false
+  match /^pl ([A-Za-z0-9+]{1,10})$/, group: :uno, method: :play, use_prefix: false
 
 
   match /^tu$/,           group: :uno, method: :cd, use_prefix: false
@@ -188,8 +188,7 @@ class UnoPlugin
   def is_a_double_card_string? text
     length = text.length
     length > 3 && length.even? &&
-      (text[0..(length / 2 - 1)] == text[(length / 2)..length]) &&
-      text[1] != 'd' # even length, not a wd4
+      (text[0..(length / 2 - 1)] == text[(length / 2)..length])
   end
 
   def play(m)

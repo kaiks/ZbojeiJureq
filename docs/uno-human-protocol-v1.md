@@ -78,3 +78,11 @@ messages. A reconnecting client requests status to recover public turn state,
 then sends the existing `ca` command to receive its complete hand privately.
 Thus resynchronization requires at most these two requests. The client must know
 the Uno rules for deriving legal actions; this v1 snapshot does not list them.
+
+## Double wild draw four syntax
+
+Human commands retain the existing compact `pl` syntax. Two identical wild draw
+fours can now be played together by repeating the colored card code, for example
+`pl wd4rwd4r`. The final color letter is required for each half and both halves
+must be identical. Existing single wild (`pl wr`), single wild draw four
+(`pl wd4r`), and other double-card commands remain unchanged.

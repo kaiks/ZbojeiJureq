@@ -90,6 +90,44 @@ RSpec.describe UnoPlugin do
       plugin.play(uppercase_message)
     end
 
+    it 'plays two wild draw fours with the selected color' do
+      2.times { player.hand << Jedna::Card.new(:wild, 'wild+4') }
+      double_message = double('double wd4 message', user: user, channel: channel, message: 'pl wd4rwd4r')
+
+      expect(game).to receive(:player_card_play) do |_player, card, double_play|
+        expect(card.figure).to eq('wild+4')
+        expect(card.color).to eq(:red)
+        expect(double_play).to be(true)
+      end
+
+      plugin.play(double_message)
+    end
+
+    it 'applies double wild draw four syntax through the real game engine' do
+      real_game = IrcUnoGame.new('Alice', 1)
+      alice = Jedna::Player.new('Alice')
+      bob = Jedna::Player.new('Bob')
+      alice.hand << [
+        Jedna::Card.new(:wild, 'wild+4'),
+        Jedna::Card.new(:wild, 'wild+4'),
+        Jedna::Card.new(:blue, 1)
+      ]
+      bob.hand << Jedna::Card.new(:yellow, 2)
+      real_game.players.replace([alice, bob])
+      real_game.notifier = Jedna::NullNotifier.new
+      real_game.instance_variable_set(:@played_cards, Jedna::CardStack.new)
+      real_game.instance_variable_set(:@top_card, Jedna::Card.new(:red, 7))
+      real_game.instance_variable_set(:@game_state, 1)
+      plugin.instance_variable_get(:@games)['#one'] = real_game
+      double_message = double('double wd4 message', user: user, channel: channel, message: 'pl wd4rwd4r')
+
+      plugin.play(double_message)
+
+      expect(alice.hand.map(&:to_s)).to eq(['b1'])
+      expect(real_game.top_card.to_s).to eq('wd4r')
+      expect(real_game.game_state).to eq(3)
+      expect(real_game.stacked_cards).to eq(8)
+    end
   end
 
   describe '#status' do
@@ -248,11 +286,13 @@ RSpec.describe UnoPlugin do
       expect(matchers.map(&:method)).not_to include(:temp)
     end
 
-    it 'registers both human status commands' do
+    it 'registers both human status commands and accepts double wd4 syntax' do
       matchers = described_class.matchers
       status_patterns = matchers.select { |matcher| matcher.method == :status }.map { |matcher| matcher.pattern.source }
+      play_matcher = matchers.find { |matcher| matcher.method == :play }
 
       expect(status_patterns).to contain_exactly('^us$', 'uno status$')
+      expect(play_matcher.pattern).to match('pl wd4rwd4r')
     end
   end
 

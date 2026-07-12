@@ -344,21 +344,13 @@ class UnoPlugin
   def start_game(m, casual:)
     with_channel(m) do |channel|
       channel_lifecycle_monitor(channel).synchronize do
-        game = nil
-        created = @games_monitor.synchronize do
-          if @games[channel]
-            false
-          else
-            game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
-            @games[channel] = game
-            true
-          end
-        end
-
-        unless created
+        if @games_monitor.synchronize { @games.key?(channel) }
           m.reply 'An uno game is already being played in this channel.'
           next
         end
+
+        game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
+        @games_monitor.synchronize { @games[channel] = game }
 
         casual_text = casual ? 'casual ' : ''
         m.reply "Ok, created #{casual_text}04U09N12O08! game on #{m.channel}, say 'jo' to join in"

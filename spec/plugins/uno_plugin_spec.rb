@@ -409,6 +409,50 @@ RSpec.describe UnoPlugin do
       second_thread&.join
     end
 
+    it 'does not hold the global map monitor while constructing another channel game' do
+      other_channel = double('other channel', name: '#two', to_s: '#two')
+      bob = double('bob', nick: 'Bob')
+      start_message = double('start message', user: user, channel: channel, reply: nil)
+      join_message = double('join message', user: bob, channel: other_channel)
+      constructor_started = Queue.new
+      release_constructor = Queue.new
+      second_finished = Queue.new
+      first_game = instance_double(IrcUnoGame, players: [])
+      second_game = instance_double(IrcUnoGame, players: [])
+      allow(first_game).to receive(:add_player)
+      allow(second_game).to receive(:add_player) { second_finished << true }
+      allow(IrcUnoGame).to receive(:new) do
+        expect(plugin.instance_variable_get(:@games_monitor).mon_owned?).to be(false)
+        constructor_started << true
+        release_constructor.pop
+        first_game
+      end
+      plugin.instance_variable_get(:@games)['#two'] = second_game
+
+      start_thread = Thread.new { plugin.start_casual(start_message) }
+      constructor_started.pop
+      join_thread = Thread.new { plugin.join(join_message) }
+
+      expect(join_thread.join(0.5)).to eq(join_thread)
+      expect(second_finished.pop).to be(true)
+      release_constructor << true
+      start_thread.value
+      join_thread.value
+      expect(plugin.instance_variable_get(:@games)['#one']).to equal(first_game)
+    ensure
+      release_constructor << true if release_constructor&.empty? && start_thread&.alive?
+      start_thread&.join
+      join_thread&.join
+    end
+
+    it 'does not insert a game when construction fails' do
+      message = double('start message', user: user, channel: channel)
+      allow(IrcUnoGame).to receive(:new).and_raise(Sequel::DatabaseError, 'database unavailable')
+
+      expect { plugin.start(message) }.to raise_error(Sequel::DatabaseError, 'database unavailable')
+      expect(plugin.instance_variable_get(:@games)).not_to have_key('#one')
+    end
+
     it 'removes an ended game reentrantly from a same-channel game command' do
       game = IrcUnoGame.new('Alice', 1)
       plugin.instance_variable_get(:@games)['#one'] = game

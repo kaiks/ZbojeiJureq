@@ -32,7 +32,7 @@ module UnoMachine
 
     def initialize(nicks)
       values = nicks.is_a?(String) ? nicks.split(',') : Array(nicks)
-      @nicks = values.map { |nick| Nick.normalize(nick.strip) }.reject(&:empty?).uniq.freeze
+      @nicks = values.map { |nick| Nick.normalize(nick.to_s.strip) }.reject(&:empty?).uniq.freeze
     end
 
     def include?(nick)
@@ -43,7 +43,7 @@ module UnoMachine
   Registration = Struct.new(:nick, :player, keyword_init: true)
   Decision = Struct.new(:id, :reason, :player, :status, :deferred, keyword_init: true)
   Session = Struct.new(
-    :game_id, :channel, :game, :registration, :pending, :decisions, :sequence, :applying,
+    :game_id, :channel, :game, :registration, :pending, :decisions, :applying,
     keyword_init: true
   )
 
@@ -77,7 +77,6 @@ module UnoMachine
           registration: nil,
           pending: nil,
           decisions: {},
-          sequence: 0,
           applying: nil
         )
         @by_id[game_id] = session
@@ -152,7 +151,6 @@ module UnoMachine
         registration = session&.registration
         next unless registration && registration.player.equal?(player)
 
-        session.sequence += 1
         @decision_sequence += 1
         decision = Decision.new(
           id: "d#{@decision_sequence.to_s(36)}_#{@random.call}",

@@ -121,5 +121,6 @@ either creates the next turn decision or ends the game.
 under the game monitor. It only performs a nonblocking enqueue afterward. A
 single bounded worker performs NOTICE delivery without the game monitor,
 global games monitor, or per-channel lifecycle monitor. The host never waits
-for inference or an action. Worker exceptions are isolated; unload/disconnect
-shuts the worker down deterministically.
+for inference or an action. Worker exceptions are isolated. Disconnect clears
+registrations while keeping delivery available for a later reconnect; plugin
+unload drains or terminates the managed worker deterministically.

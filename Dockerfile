@@ -1,4 +1,4 @@
-ARG RUBY_VERSION=4.0.2-slim-bookworm
+ARG RUBY_VERSION=4.0.5-slim-bookworm
 
 FROM ruby:${RUBY_VERSION}
 

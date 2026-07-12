@@ -1,7 +1,7 @@
 # ZbojeiJureq
 cinch-based irc bot with many plugins
 
-Currently runs on mri (tested on 4.0.2) and should work on all distributions on which gems run (e.g. some versions of jruby)
+Currently runs on mri (tested on 4.0.5) and should work on all distributions on which gems run (e.g. some versions of jruby)
 
 ## Installation
 To install, first install bundle, and then:

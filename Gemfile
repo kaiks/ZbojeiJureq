@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-ruby '4.0.2'
+ruby '4.0.5'
 
 # Use Cinch fork directly from GitHub
 gem 'cinch', git: 'https://github.com/blolol/cinch.git'

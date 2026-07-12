@@ -1,5 +1,6 @@
 require 'thread'
 require 'jedna'
+require 'jedna/interfaces/irc_notifier'
 require './plugins/uno/uno_db.rb'
 require './config.rb'
 
@@ -11,7 +12,16 @@ class IrcUnoGame < Jedna::Game
   def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil)
     notifier = Jedna::IrcNotifier.new(irc, channel) if irc
     renderer = Jedna::IrcRenderer.new
-    repository = casual == 1 ? Jedna::NullRepository.new : Jedna::SqliteRepository.new
+    repository = if casual == 1
+                   Jedna::NullRepository.new
+                 else
+                   Jedna::SqliteRepository.new(
+                     game_model: UnoGameModel,
+                     turn_model: UnoTurnModel,
+                     action_model: UnoActionModel,
+                     rank_model: UnoRankModel
+                   )
+                 end
     super(creator, casual, notifier, renderer, repository)
     
     # Set up the hook for game ended
@@ -178,10 +188,10 @@ class UnoPlugin
 
       if card_text =~ /w[rgby]/
         card = @game.players[0].hand.reverse.find_card('w') #bug 1
-        card.set_wild_color Uno::expand_color card_text[1] unless card.nil?
+        card.set_wild_color Jedna.expand_color(card_text[1]) unless card.nil?
       elsif card_text =~ /wd4[rgby]/
         card = @game.players[0].hand.reverse.find_card('wd4')
-        card.set_wild_color Uno::expand_color card_text[3] unless card.nil?
+        card.set_wild_color Jedna.expand_color(card_text[3]) unless card.nil?
       elsif card_text =~ /^[^w]+$/i
         card = @game.players[0].hand.reverse.find_card(card_text)
       end

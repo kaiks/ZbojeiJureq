@@ -300,6 +300,68 @@ RSpec.describe UnoPlugin do
       expect(status_patterns).to contain_exactly('^us$', 'uno status$')
       expect(play_matcher.pattern).to match('pl wd4rwd4r')
     end
+
+    it 'registers channel-bound machine lifecycle commands and private action routing' do
+      matchers = described_class.matchers
+
+      expect(matchers.find { |matcher| matcher.method == :machine_register }.pattern.source)
+        .to eq('uno machine register$')
+      expect(matchers.find { |matcher| matcher.method == :machine_unregister }.pattern.source)
+        .to eq('uno machine unregister$')
+      expect(matchers.find { |matcher| matcher.method == :machine_action }.pattern)
+        .to match('UNO_MACHINE_V1 ACTION game=g1 decision=d1 data=e30')
+      expect(described_class.listeners.map(&:event)).to include(:nick, :part, :quit, :kick, :disconnect)
+    end
+  end
+
+
+  describe 'machine command boundary' do
+    let(:machine_sessions) { instance_double(UnoMachine::Sessions) }
+
+    before do
+      plugin.instance_variable_set(:@machine_sessions, machine_sessions)
+    end
+
+    it 'passes a valid private action to the machine session manager' do
+      line = UnoMachine::Protocol.encode_action(
+        game_id: 'g1', decision_id: 'd1', action: { action: 'draw' }
+      )
+      message = double('private machine action', user: user, channel: nil, message: line)
+      allow(machine_sessions).to receive(:channel_for_game).with('g1').and_return('#one')
+
+      expect(machine_sessions).to receive(:submit).with(
+        sender: 'Alice', game_id: 'g1', decision_id: 'd1', action: { 'action' => 'draw' }
+      ) do
+        expect(plugin.send(:channel_lifecycle_monitor, '#one').mon_owned?).to be(true)
+      end
+
+      plugin.machine_action(message)
+    end
+
+    it 'privately rejects a channel action and a malformed private action' do
+      channel_line = UnoMachine::Protocol.encode_action(
+        game_id: 'g1', decision_id: 'd1', action: { action: 'draw' }
+      )
+      expect(machine_sessions).to receive(:protocol_error).with(
+        'Alice', 'private_only', game_id: 'g1', decision_id: 'd1'
+      )
+      plugin.machine_action(double('channel action', user: user, channel: channel, message: channel_line))
+
+      expect(machine_sessions).to receive(:protocol_error).with(
+        'Alice', 'malformed_action', game_id: '-', decision_id: '-'
+      )
+      plugin.machine_action(
+        double('bad private action', user: user, channel: nil, message: 'UNO_MACHINE_V1 ACTION broken')
+      )
+    end
+
+    it 'returns structured private registration errors for private and missing-game requests' do
+      expect(machine_sessions).to receive(:protocol_error).with('Alice', 'channel_only')
+      plugin.machine_register(double('private registration', user: user, channel: nil))
+
+      expect(machine_sessions).to receive(:protocol_error).with('Alice', 'no_game')
+      plugin.machine_register(double('missing registration', user: user, channel: channel))
+    end
   end
 
   describe 'channel-scoped game state' do

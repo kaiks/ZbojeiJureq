@@ -16,6 +16,10 @@ CONFIG = {
     'maindb_upload_delay'   => 3600,
     'nick_check_delay'      => 300,
 
+    # Default-deny allowlist for automated Uno players. The comma-separated
+    # UNO_MACHINE_ALLOWLIST environment variable takes precedence.
+    'uno_machine_allowlist' => [],
+
     'ftp_upload'            => false,
     'ftp_login'             => '',
     'ftp_password'          => '',

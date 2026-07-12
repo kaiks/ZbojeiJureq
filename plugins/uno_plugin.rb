@@ -2,6 +2,8 @@ require 'monitor'
 require 'jedna'
 require 'jedna/interfaces/irc_notifier'
 require './plugins/uno/uno_db.rb'
+require './plugins/uno/machine_dispatcher'
+require './plugins/uno/machine_sessions'
 require './config.rb'
 
 # IRC-specific UnoGame implementation with thread safety
@@ -30,6 +32,9 @@ class IrcUnoGame < Jedna::Game
     # Set up the hook for game ended
     on_game_ended do
       plugin.game_ended(channel, self, upload: ranked?) if plugin
+    end
+    on_action_required do |game, player, reason|
+      plugin.machine_action_required(game, player, reason) if plugin
     end
   end
 
@@ -84,9 +89,18 @@ class UnoPlugin
   match /uno score$/,   group: :uno, method: :own_score
   match /uno score ([A-Za-z0-9_\-]+)/, group: :uno, method: :score
   match /uno status$/,  group: :uno, method: :status
+  match /uno machine register$/, group: :uno, method: :machine_register
+  match /uno machine unregister$/, group: :uno, method: :machine_unregister
+  match /^UNO_MACHINE_V1 ACTION(?: .*)?$/, group: :uno_machine, method: :machine_action, use_prefix: false
 
   match /uno$/,         group: :uno, method: :start
   match /uno/,          group: :uno, method: :help
+
+  listen_to :nick, method: :machine_nick_changed
+  listen_to :part, method: :machine_parted
+  listen_to :quit, method: :machine_quit
+  listen_to :kick, method: :machine_kicked
+  listen_to :disconnect, method: :machine_disconnected
 
   def initialize(*args)
     super
@@ -95,6 +109,12 @@ class UnoPlugin
     @testing_channels = Hash.new(false)
     @games_monitor = Monitor.new
     @channel_monitors = {}
+    @machine_sessions = build_machine_sessions
+  end
+
+  def unregister
+    @machine_sessions&.shutdown
+    super
   end
 
   def debug(m, text)
@@ -249,9 +269,80 @@ class UnoPlugin
     end
   end
 
+  def machine_register(m)
+    with_machine_game(m) do |game, channel|
+      result = @machine_sessions.register(channel: channel, game: game, nick: m.user.nick)
+      @machine_sessions.protocol_error(m.user.nick, result.code) unless result.success?
+    end
+  end
+
+  def machine_unregister(m)
+    with_machine_game(m) do |game, channel|
+      removed = @machine_sessions.unregister(channel: channel, game: game, nick: m.user.nick)
+      @machine_sessions.protocol_error(m.user.nick, 'not_registered') unless removed
+    end
+  end
+
+  def machine_action(m)
+    game_id, decision_id = machine_outer_ids(m.message)
+    if m.channel
+      @machine_sessions.protocol_error(
+        m.user.nick, 'private_only', game_id: game_id, decision_id: decision_id
+      )
+      return
+    end
+
+    parsed = UnoMachine::Protocol.parse_action(m.message)
+    channel = @machine_sessions.channel_for_game(parsed[:game_id])
+    if channel
+      channel_lifecycle_monitor(channel).synchronize do
+        @machine_sessions.submit(sender: m.user.nick, **parsed)
+      end
+    else
+      @machine_sessions.submit(sender: m.user.nick, **parsed)
+    end
+  rescue UnoMachine::Protocol::ProtocolError => e
+    @machine_sessions.protocol_error(
+      m.user.nick, e.code, game_id: game_id || '-', decision_id: decision_id || '-'
+    )
+  end
+
+  # Invoked inline by Jedna under the individual game's monitor.
+  def machine_action_required(game, player, reason)
+    @machine_sessions&.action_required(game, player, reason)
+  end
+
+  def machine_nick_changed(m)
+    @machine_sessions.cleanup_nick(
+      m.user.last_nick, event: 'nick_changed', delivery_nick: m.user.nick
+    )
+  end
+
+  def machine_parted(m)
+    @machine_sessions.cleanup_nick(
+      m.user.nick, event: 'parted', channel: normalize_channel(m.channel.name)
+    )
+  end
+
+  def machine_quit(m)
+    @machine_sessions.cleanup_nick(m.user.nick, event: 'quit')
+  end
+
+  def machine_kicked(m)
+    kicked_nick = m.params[1]
+    @machine_sessions.cleanup_nick(
+      kicked_nick, event: 'kicked', channel: normalize_channel(m.channel.name)
+    )
+  end
+
+  def machine_disconnected(*)
+    @machine_sessions.cleanup_all(event: 'disconnected')
+  end
+
   def stop(m)
     with_game(m, notify: true) do |game, channel|
       game.stop_game m.user.nick
+      @machine_sessions&.cancel_game(game, event: 'stopped', payload: { stopped_by: m.user.nick })
       @games_monitor.synchronize do
         @games.delete(channel) if @games[channel].equal?(game)
         @game_histories.delete(channel)
@@ -279,6 +370,7 @@ class UnoPlugin
 
   def game_ended(channel_name, game, upload:)
     channel = normalize_channel(channel_name)
+    @machine_sessions&.finish_game(game, winner: game.players.first)
     channel_lifecycle_monitor(channel).synchronize do
       @games_monitor.synchronize do
         @games.delete(channel) if @games[channel].equal?(game)
@@ -341,6 +433,48 @@ class UnoPlugin
 
   private
 
+  def build_machine_sessions
+    dispatcher = UnoMachine::Dispatcher.new(error_handler: method(:machine_delivery_error))
+    transport = UnoMachine::Transport.new(
+      dispatcher: dispatcher,
+      notice_target: ->(nick) { @bot.User(nick) }
+    )
+    UnoMachine::Sessions.new(
+      transport: transport,
+      allowlist: UnoMachine::Allowlist.from(config: CONFIG)
+    )
+  end
+
+  def machine_delivery_error(error)
+    @bot.loggers.error("[uno machine] delivery failed: #{error.class}: #{error.message}")
+  end
+
+  def machine_outer_ids(message)
+    match = message.to_s.match(/\AUNO_MACHINE_V1 ACTION game=([^ ]+) decision=([^ ]+)/)
+    return ['-', '-'] unless match
+
+    match.captures.map { |token| UnoMachine::Protocol.valid_token?(token) ? token : '-' }
+  end
+
+  def with_machine_game(m)
+    channel_name = m.channel&.name
+    unless channel_name
+      @machine_sessions.protocol_error(m.user.nick, 'channel_only')
+      return
+    end
+
+    channel = normalize_channel(channel_name)
+    channel_lifecycle_monitor(channel).synchronize do
+      game = @games_monitor.synchronize { @games[channel] }
+      unless game
+        @machine_sessions.protocol_error(m.user.nick, 'no_game')
+        next
+      end
+
+      yield game, channel
+    end
+  end
+
   def start_game(m, casual:)
     with_channel(m) do |channel|
       channel_lifecycle_monitor(channel).synchronize do
@@ -350,6 +484,7 @@ class UnoPlugin
         end
 
         game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
+        @machine_sessions&.attach_game(channel: channel, game: game)
         @games_monitor.synchronize { @games[channel] = game }
 
         casual_text = casual ? 'casual ' : ''

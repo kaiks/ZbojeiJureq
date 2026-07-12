@@ -61,7 +61,7 @@ module UnoMachine
       @random = random || -> { SecureRandom.urlsafe_base64(9, padding: false) }
       @mutex = Mutex.new
       @by_id = {}
-      @by_game = {}
+      @by_game = {}.compare_by_identity
       @game_sequence = 0
       @decision_sequence = 0
     end
@@ -80,13 +80,13 @@ module UnoMachine
           applying: nil
         )
         @by_id[game_id] = session
-        @by_game[game.object_id] = session
+        @by_game[game] = session
         game_id
       end
     end
 
     def game_id_for(game)
-      @mutex.synchronize { @by_game[game.object_id]&.game_id }
+      @mutex.synchronize { @by_game[game]&.game_id }
     end
 
     def channel_for_game(game_id)
@@ -102,7 +102,7 @@ module UnoMachine
       return Result.new(success: false, code: 'not_player', game_id: nil) unless player
 
       session = @mutex.synchronize do
-        candidate = @by_game[game.object_id]
+        candidate = @by_game[game]
         next unless candidate && candidate.channel == channel
         existing = candidate.registration
         if existing && !existing.player.equal?(player)
@@ -126,7 +126,7 @@ module UnoMachine
 
     def unregister(channel:, game:, nick:, event: 'unregistered')
       delivery = @mutex.synchronize do
-        session = @by_game[game.object_id]
+        session = @by_game[game]
         registration = session&.registration
         next unless session && session.channel == channel && registration&.nick == Nick.normalize(nick)
 
@@ -144,7 +144,7 @@ module UnoMachine
       return unless request
 
       delivery = @mutex.synchronize do
-        session = @by_game[game.object_id]
+        session = @by_game[game]
         next unless session
 
         replace_pending_decision(session)
@@ -312,7 +312,7 @@ module UnoMachine
 
     def finish_session(game, event:, payload:)
       delivery = @mutex.synchronize do
-        session = @by_game.delete(game.object_id)
+        session = @by_game.delete(game)
         next unless session
 
         @by_id.delete(session.game_id)

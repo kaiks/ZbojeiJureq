@@ -1,4 +1,4 @@
-require 'thread'
+require 'monitor'
 require 'jedna'
 require 'jedna/interfaces/irc_notifier'
 require './plugins/uno/uno_db.rb'
@@ -6,10 +6,13 @@ require './config.rb'
 
 # IRC-specific UnoGame implementation with thread safety
 class IrcUnoGame < Jedna::Game
-  # Include thread safety for IRC bot usage
-  prepend ThreadSafeDefault
+  include ThreadSafeGame
+
+  attr_reader :channel
   
   def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil)
+    @channel = channel
+    @ranked = casual != 1
     notifier = Jedna::IrcNotifier.new(irc, channel) if irc
     renderer = Jedna::IrcRenderer.new
     repository = if casual == 1
@@ -26,9 +29,12 @@ class IrcUnoGame < Jedna::Game
     
     # Set up the hook for game ended
     on_game_ended do
-      plugin.upload_db unless casual == 1
-      plugin.end_game if plugin
+      plugin.game_ended(channel, self, upload: ranked?) if plugin
     end
+  end
+
+  def ranked?
+    @ranked
   end
 end
 
@@ -86,9 +92,9 @@ class UnoPlugin
   def initialize(*args)
     super
     @games = {}
-    @game = nil
-    @this_game_history = nil
-    @testing = false
+    @game_histories = {}
+    @testing_channels = Hash.new(false)
+    @games_monitor = Monitor.new
   end
 
   def debug(m, text)
@@ -97,74 +103,79 @@ class UnoPlugin
   end
 
   def testing(m)
-    @testing = !@testing
-    m.reply "Ok. Now set to #{@testing}"
+    with_channel(m) do |channel|
+      @testing_channels[channel] = !@testing_channels[channel]
+      m.reply "Ok. Now set to #{@testing_channels[channel]}"
+    end
   end
 
   def ca(m)
-    current_player = @game.players.find{ |p| p.matches?(m.user.nick) }
-    if current_player
-      @game.show_player_cards(current_player)
-    end
-    if @game.game_state > 0
-      @game.show_card_count
+    with_game(m) do |game|
+      current_player = game.players.find { |p| p.matches?(m.user.nick) }
+      game.show_player_cards(current_player) if current_player
+      game.show_card_count if game.game_state > 0
     end
   end
 
   def cd(m)
-    return unless @game.players.any? { |p| p.matches?(m.user.nick) }
-    @game.notify_top_card
+    with_game(m) do |game|
+      game.notify_top_card if game.players.any? { |p| p.matches?(m.user.nick) }
+    end
   end
 
   def get_stack_size(m)
-    m.reply "#{@game.card_stack.length} cards left in the stack" if @game.started?
+    with_game(m) do |game|
+      m.reply "#{game.card_stack.length} cards left in the stack" if game.started?
+    end
   end
 
 
   def deal(m)
-    if @game.creator.to_s == m.user.nick
-      if @testing
-        if @this_game_history == nil
-          @game.start_game
-          @this_game_history = UnoGameHistory.new(@game.starting_stack, @game.first_player)
+    with_game(m, notify: true) do |game, channel|
+      if game.creator.to_s == m.user.nick
+        if @testing_channels[channel]
+          if @game_histories[channel].nil?
+            game.start_game
+            if game.started?
+              @game_histories[channel] = UnoGameHistory.new(game.starting_stack, game.first_player)
+            end
+          else
+            history = @game_histories.delete(channel)
+            game.start_game history.stack, history.first_player
+          end
         else
-          @game.start_game @this_game_history.stack, @this_game_history.first_player
-          @this_game_history = nil
+          game.start_game
         end
+      elsif game.started?
+        m.reply 'Cards have already been dealt.'
       else
-        @game.start_game
+        m.reply "#{game.creator} needs to deal"
       end
-    elsif @game.started?
-      m.reply 'Cards have already been dealt.'
-    else
-      m.reply "#{@game.creator.to_s} needs to deal"
     end
   end
 
   def join(m)
-    puts "Current players: " + @game.players.to_s
-    if @game.players.find{ |p| p.matches?(m.user.nick) }.nil?
-      new_player = Jedna::Player.new(m.user.nick)
-      @game.add_player new_player
-    else
-      m.reply "You are already in the game, #{m.user.nick}."
+    with_game(m) do |game|
+      join_game(game, m)
     end
   end
 
   def order(m)
-    players_ordered = @game.players.map(&:to_s).join(' ')
-    @game.notify "Current order: #{players_ordered}"
+    with_game(m) do |game|
+      players_ordered = game.players.map(&:to_s).join(' ')
+      game.notify "Current order: #{players_ordered}"
+    end
   end
 
   def pass(m)
-    if @game.players[0].matches?(m.user.nick)
-      @game.turn_pass
+    with_game(m) do |game|
+      game.turn_pass if current_player?(game, m.user.nick)
     end
   end
 
   def pick(m)
-    if @game.players[0].matches?(m.user.nick)
-      @game.pick_single
+    with_game(m) do |game|
+      game.pick_single if current_player?(game, m.user.nick)
     end
   end
 
@@ -176,7 +187,10 @@ class UnoPlugin
   end
 
   def play(m)
-    if @game.players[0].matches?(m.user.nick)
+    with_game(m) do |game|
+      next unless current_player?(game, m.user.nick)
+
+      player = game.players[0]
       proposed_card_text = m.message.split[1]
       card_text = proposed_card_text
       card = nil
@@ -187,45 +201,36 @@ class UnoPlugin
       end
 
       if card_text =~ /w[rgby]/
-        card = @game.players[0].hand.reverse.find_card('w') #bug 1
+        card = player.hand.reverse.find_card('w')
         card.set_wild_color Jedna.expand_color(card_text[1]) unless card.nil?
       elsif card_text =~ /wd4[rgby]/
-        card = @game.players[0].hand.reverse.find_card('wd4')
+        card = player.hand.reverse.find_card('wd4')
         card.set_wild_color Jedna.expand_color(card_text[3]) unless card.nil?
       elsif card_text =~ /^[^w]+$/i
-        card = @game.players[0].hand.reverse.find_card(card_text)
+        card = player.hand.reverse.find_card(card_text)
       end
       puts "Proposed card text: #{proposed_card_text}"
-      @game.player_card_play(@game.players[0], card, is_a_double_card_string?(proposed_card_text))
-      @game.players[0].hand.reset_wilds
+      game.player_card_play(player, card, is_a_double_card_string?(proposed_card_text))
+      player.hand.reset_wilds
     end
   end
 
   def start(m)
-    if @game.nil?
-      @game = IrcUnoGame.new(m.user.nick, 0, @bot, m.channel.name, self)
-      m.reply "Ok, created 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
-      join(m)
-    else
-      m.reply "An uno game is already being played."
-    end
+    start_game(m, casual: false)
   end
 
   def start_casual(m)
-    if @game.nil?
-      @game = IrcUnoGame.new(m.user.nick, 1, @bot, m.channel.name, self)
-      m.reply "Ok, created casual 04U09N12O08! game on #{m.channel}, say 'jo' to join in"
-      join(m)
-    else
-      m.reply "An uno game is already being played."
-    end
+    start_game(m, casual: true)
   end
 
   def stop(m)
-    @game.stop_game m.user.nick
-    @game = nil
-    m.reply 'Uno game has been stopped.'
-    upload_db
+    with_game(m, notify: true) do |game, channel|
+      game.stop_game m.user.nick
+      @games.delete(channel)
+      @game_histories.delete(channel)
+      m.reply 'Uno game has been stopped.'
+      upload_db if game.ranked?
+    end
   end
 
   def top(m, n = 5)
@@ -244,8 +249,12 @@ class UnoPlugin
     }
   end
 
-  def end_game
-    @game = nil
+  def game_ended(channel_name, game, upload:)
+    upload_db if upload
+    @games_monitor.synchronize do
+      channel = normalize_channel(channel_name)
+      @games.delete(channel) if @games[channel].equal?(game)
+    end
     @bot.send_to_ftp './uno.db', '', 'unodb'
   end
 
@@ -287,5 +296,59 @@ class UnoPlugin
     #todo: ftp
     @bot.upload_to_dropbox './uno.db'
     @bot.send_to_ftp('./uno.db')
+  end
+
+  private
+
+  def start_game(m, casual:)
+    with_channel(m) do |channel|
+      if @games[channel]
+        m.reply 'An uno game is already being played in this channel.'
+        next
+      end
+
+      game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
+      @games[channel] = game
+      casual_text = casual ? 'casual ' : ''
+      m.reply "Ok, created #{casual_text}04U09N12O08! game on #{m.channel}, say 'jo' to join in"
+      join_game(game, m)
+    end
+  end
+
+  def join_game(game, m)
+    if game.players.none? { |player| player.matches?(m.user.nick) }
+      game.add_player Jedna::Player.new(m.user.nick)
+    else
+      m.reply "You are already in the game, #{m.user.nick}."
+    end
+  end
+
+  def current_player?(game, nick)
+    game.players.first&.matches?(nick)
+  end
+
+  def with_channel(m)
+    channel = m.channel&.name
+    unless channel
+      m.reply 'Uno games can only be played in a channel.'
+      return
+    end
+
+    @games_monitor.synchronize { yield normalize_channel(channel) }
+  end
+
+  def with_game(m, notify: false)
+    with_channel(m) do |channel|
+      game = @games[channel]
+      if game
+        yield game, channel
+      elsif notify
+        m.reply 'No uno game is running in this channel.'
+      end
+    end
+  end
+
+  def normalize_channel(channel)
+    channel.to_s.downcase
   end
 end

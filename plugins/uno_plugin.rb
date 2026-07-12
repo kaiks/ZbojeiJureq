@@ -67,27 +67,24 @@ class UnoPlugin
   match /^pa$/,         group: :uno, method: :pass, use_prefix: false
   match /^pe$/,         group: :uno, method: :pick, use_prefix: false
   match /^st$/,         group: :uno, method: :get_stack_size, use_prefix: false
-  match /^pl ([A-z0-9+]{1,6})$/,   group: :uno, method: :play, use_prefix: false
+  match /^pl ([A-Za-z0-9+]{1,8})$/, group: :uno, method: :play, use_prefix: false
 
 
   match /^tu$/,           group: :uno, method: :cd, use_prefix: false
 
-  match /uno quit$/,     group: :uno, method: :temp
+  match /uno quit$/,     group: :uno, method: :stop
   match /uno test$/,     group: :uno, method: :testing
 
   match /uno casual/,   group: :uno, method: :start_casual
   match /uno reload/,   group: :uno, method: :reload
   match /uno stop/,     group: :uno, method: :stop
-  match /uno top ([1-5])/,      group: :uno, method: :top
-  match /uno top$/,      group: :uno, method: :top
+  match /uno top(?: ([1-5]))?$/, group: :uno, method: :top
   match /uno debug (.*)/,    group: :uno, method: :debug
   match /uno score$/,   group: :uno, method: :own_score
-  match /uno score ([A-z0-9_\-]+)/,    group: :uno, method: :score
+  match /uno score ([A-Za-z0-9_\-]+)/, group: :uno, method: :score
 
   match /uno$/,         group: :uno, method: :start
   match /uno/,          group: :uno, method: :help
-
-  match /uno top(\s?[0-5])?/, group: :uno, method: :top
 
   def initialize(*args)
     super
@@ -191,25 +188,22 @@ class UnoPlugin
       next unless current_player?(game, m.user.nick)
 
       player = game.players[0]
-      proposed_card_text = m.message.split[1]
+      proposed_card_text = m.message.split[1].downcase
       card_text = proposed_card_text
       card = nil
-      #make it dry
       if is_a_double_card_string?(proposed_card_text)
-        puts proposed_card_text.to_s
         card_text = proposed_card_text[0..(proposed_card_text.length / 2 - 1)]
       end
 
-      if card_text =~ /w[rgby]/
+      if card_text.match?(/\Aw[rgby]\z/)
         card = player.hand.reverse.find_card('w')
         card.set_wild_color Jedna.expand_color(card_text[1]) unless card.nil?
-      elsif card_text =~ /wd4[rgby]/
+      elsif card_text.match?(/\Awd4[rgby]\z/)
         card = player.hand.reverse.find_card('wd4')
         card.set_wild_color Jedna.expand_color(card_text[3]) unless card.nil?
-      elsif card_text =~ /^[^w]+$/i
+      elsif card_text.match?(/\A[^w]+\z/)
         card = player.hand.reverse.find_card(card_text)
       end
-      puts "Proposed card text: #{proposed_card_text}"
       game.player_card_play(player, card, is_a_double_card_string?(proposed_card_text))
       player.hand.reset_wilds
     end
@@ -235,7 +229,7 @@ class UnoPlugin
 
   def top(m, n = 5)
     counter = 0
-    n = n.to_i
+    n = n ? n.to_i : 5
 
     m.reply '   ' + "nick".ljust(20) + 'points  games  average  wins  winrate - full list: http://uno.kaiks.eu '
     #SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) sr FROM uno WHERE nick LIKE ' $+ %safe_nick $+ ' AND games >= 2 ORDER BY %by %ord LIMIT %count
@@ -286,10 +280,16 @@ class UnoPlugin
   end
 
   def reload(m)
-    # Reload the jedna gem files
-    $LOADED_FEATURES.grep(/jedna/).each { |f| load f }
-    load './plugins/uno/uno_db.rb'
+    original_verbose = $VERBOSE
+    gem_root = Gem.loaded_specs.fetch('jedna').full_gem_path
+    source_root = File.join(gem_root, 'lib', 'jedna') + File::SEPARATOR
+    loaded_sources = $LOADED_FEATURES.select { |path| path.start_with?(source_root) }
+
+    $VERBOSE = nil
+    loaded_sources.each { |path| load path }
     m.reply 'Uno reloaded.'
+  ensure
+    $VERBOSE = original_verbose
   end
 
   def upload_db

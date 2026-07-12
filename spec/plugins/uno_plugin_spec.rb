@@ -68,6 +68,40 @@ RSpec.describe UnoPlugin do
 
       plugin.play(message)
     end
+
+    it 'normalizes uppercase card commands' do
+      uppercase_message = double('uppercase message', user: user, channel: channel, message: 'pl WR')
+      expect(game).to receive(:player_card_play) do |_player, card, _double_play|
+        expect(card.color).to eq(:red)
+      end
+
+      plugin.play(uppercase_message)
+    end
+  end
+
+  describe '#reload' do
+    it 'reloads jedna without redefining application database models' do
+      message = double('message')
+      database = UNODB
+      game_model = UnoGameModel
+      expect(message).to receive(:reply).with('Uno reloaded.')
+
+      expect { plugin.reload(message) }.not_to raise_error
+      expect(UNODB).to be(database)
+      expect(UnoGameModel).to be(game_model)
+    end
+  end
+
+  describe 'command registration' do
+    it 'routes quit to stop and has one leaderboard matcher' do
+      matchers = described_class.matchers
+      quit_matcher = matchers.find { |matcher| matcher.pattern.source.include?('uno quit') }
+      top_matchers = matchers.select { |matcher| matcher.pattern.source.include?('uno top') }
+
+      expect(quit_matcher.method).to eq(:stop)
+      expect(top_matchers.size).to eq(1)
+      expect(matchers.map(&:method)).not_to include(:temp)
+    end
   end
 
   describe 'channel-scoped game state' do

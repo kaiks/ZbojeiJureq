@@ -7,17 +7,29 @@ require_relative '../../plugins/uno_plugin'
 RSpec.describe IrcUnoGame do
   describe 'persistence integration' do
     it 'constructs ranked games with the application database models' do
-      repository = Jedna::NullRepository.new
-      expect(Jedna::SqliteRepository).to receive(:new).with(
-        game_model: UnoGameModel,
-        turn_model: UnoTurnModel,
-        action_model: UnoActionModel,
-        rank_model: UnoRankModel
-      ).and_return(repository)
+      database = Sequel.sqlite
+      database.create_table(:games) do
+        primary_key :ID
+        String :start
+        String :created_by
+      end
+      database.create_table(:turn) { primary_key :ID }
+      database.create_table(:player_action) { primary_key :ID }
+      database.create_table(:uno) { String :nick, primary_key: true }
+
+      stub_const('UnoGameModel', Class.new(Sequel::Model(database[:games])))
+      stub_const('UnoTurnModel', Class.new(Sequel::Model(database[:turn])))
+      stub_const('UnoActionModel', Class.new(Sequel::Model(database[:player_action])))
+      rank_model = Class.new(Sequel::Model(database[:uno]))
+      rank_model.unrestrict_primary_key
+      stub_const('UnoRankModel', rank_model)
 
       game = described_class.new('Alice', 0)
 
-      expect(game.repository).to be(repository)
+      expect(game.repository).to be_a(Jedna::SqliteRepository)
+      expect(database[:games].first).to include(created_by: 'Alice')
+    ensure
+      database&.disconnect
     end
 
     it 'keeps casual games out of the application database' do
@@ -125,9 +137,11 @@ RSpec.describe UnoPlugin do
 
   describe 'channel-scoped game state' do
     let(:broadcast) { double('broadcast', send: nil) }
+    let(:notice) { double('notice', notice: nil) }
 
     before do
       allow(bot).to receive(:Channel).and_return(broadcast)
+      allow(bot).to receive(:User).and_return(notice)
     end
 
     it 'runs independent games in different channels' do
@@ -141,6 +155,41 @@ RSpec.describe UnoPlugin do
       games = plugin.instance_variable_get(:@games)
       expect(games.keys).to contain_exactly('#one', '#two')
       expect(games.values).to all(be_a(IrcUnoGame))
+    end
+
+    it 'creates only one game when starts race in the same channel' do
+      message = double('message', user: user, channel: channel, reply: nil)
+      creations = 0
+      allow(IrcUnoGame).to receive(:new).and_wrap_original do |original, *args|
+        creations += 1
+        sleep 0.01
+        original.call(*args)
+      end
+
+      threads = 2.times.map { Thread.new { plugin.start_casual(message) } }
+      threads.each(&:join)
+
+      expect(creations).to eq(1)
+      expect(plugin.instance_variable_get(:@games).size).to eq(1)
+    end
+
+    it 'plays a casual game through start, join, deal, and stop' do
+      bob = double('bob', nick: 'Bob')
+      creator_message = double('creator message', user: user, channel: channel, reply: nil)
+      join_message = double('join message', user: bob, channel: channel, reply: nil)
+
+      plugin.start_casual(creator_message)
+      plugin.join(join_message)
+      plugin.deal(creator_message)
+
+      game = plugin.instance_variable_get(:@games)['#one']
+      expect(game).to be_started
+      expect(game.players.map(&:to_s)).to contain_exactly('Alice', 'Bob')
+      expect(game.players.map { |player| player.hand.size }).to eq([7, 7])
+
+      expect(bot).not_to receive(:upload_to_dropbox)
+      plugin.stop(creator_message)
+      expect(plugin.instance_variable_get(:@games)).not_to have_key('#one')
     end
 
     it 'does not dereference missing game state' do

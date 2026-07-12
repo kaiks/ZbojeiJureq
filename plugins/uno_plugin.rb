@@ -313,9 +313,28 @@ class UnoPlugin
   end
 
   def machine_nick_changed(m)
-    @machine_sessions.cleanup_nick(
-      m.user.last_nick, event: 'nick_changed', delivery_nick: m.user.nick
-    )
+    old_nick = m.user.last_nick
+    new_nick = m.user.nick
+    games = @games_monitor.synchronize { @games.to_a }
+
+    games.each do |channel, expected_game|
+      channel_lifecycle_monitor(channel).synchronize do
+        game = @games_monitor.synchronize { @games[channel] }
+        next unless game.equal?(expected_game)
+
+        game.synchronize do
+          next unless game.players.any? { |player| player.matches?(old_nick) }
+
+          @machine_sessions.cleanup_nick(
+            old_nick,
+            event: 'nick_changed',
+            channel: channel,
+            delivery_nick: new_nick
+          )
+          game.rename_player(old_nick, new_nick)
+        end
+      end
+    end
   end
 
   def machine_parted(m)

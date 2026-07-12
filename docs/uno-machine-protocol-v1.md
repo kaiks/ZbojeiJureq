@@ -27,7 +27,13 @@ UNO_MACHINE_V1 REGISTERED game=<game-id> channel=<base64url-channel>
 Registration is bound to that player object, normalized IRC nick, channel,
 and game ID. `.uno machine unregister` removes it. Nick changes, part/quit/kick,
 game stop/end, disconnection, and plugin unload also remove it. A nick change
-requires joining/renaming in the ordinary game flow and registering again.
+renames the existing game player in every affected channel, privately emits
+`nick_changed` to the new nick, and clears the old machine registration. The
+client then registers the new nick again; it does not rejoin or lose its hand.
+If a concurrently dispatched registration reaches the channel before the NICK
+handler, it can receive `not_player` once and retries after `nick_changed`.
+The per-channel lifecycle monitor guarantees that once cleanup begins, its
+terminal EVENT is queued before a new registration can succeed in that channel.
 
 ## Tokens and framing
 

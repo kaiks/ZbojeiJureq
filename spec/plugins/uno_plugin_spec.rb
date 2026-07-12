@@ -376,6 +376,105 @@ RSpec.describe UnoPlugin do
     end
   end
 
+  describe 'nick changes' do
+    def started_game(first_player: 'Alice')
+      game = IrcUnoGame.new('Alice', 1)
+      alice = Jedna::Player.new('Alice')
+      bob = Jedna::Player.new('Bob')
+      game.add_player(alice)
+      game.add_player(bob)
+      game.start_game(nil, first_player)
+      [game, alice, bob]
+    end
+
+    it 'renames an ordinary player in every active channel and permits continued play' do
+      first_game, first_alice, = started_game
+      second_game, second_alice, = started_game
+      plugin.instance_variable_get(:@games).merge!('#one' => first_game, '#two' => second_game)
+      machine_sessions = instance_double(UnoMachine::Sessions)
+      plugin.instance_variable_set(:@machine_sessions, machine_sessions)
+      changed_user = double('renamed user', last_nick: 'Alice', nick: 'Alice2')
+      message = double('nick event', user: changed_user)
+
+      expect(machine_sessions).to receive(:cleanup_nick).with(
+        'Alice', event: 'nick_changed', channel: '#one', delivery_nick: 'Alice2'
+      ).and_return(0)
+      expect(machine_sessions).to receive(:cleanup_nick).with(
+        'Alice', event: 'nick_changed', channel: '#two', delivery_nick: 'Alice2'
+      ).and_return(0)
+
+      plugin.machine_nick_changed(message)
+
+      expect(first_alice).to be_matches('Alice2')
+      expect(first_alice).not_to be_matches('Alice')
+      expect(second_alice).to be_matches('Alice2')
+      plugin.pick(double('new nick draw', user: changed_user, channel: channel))
+      expect(first_game.already_picked).to be(true)
+    end
+
+    it 'queues cleanup before a racing new-nick registration and resynchronizes' do
+      deliveries = []
+      delivery_mutex = Mutex.new
+      transport = Object.new
+      transport.define_singleton_method(:deliver) do |nick, lines|
+        delivery_mutex.synchronize { deliveries << [nick, Array(lines)] }
+        true
+      end
+      transport.define_singleton_method(:deliver_batch) do |batch|
+        batch.each { |nick, lines| deliver(nick, lines) }
+        true
+      end
+      transport.define_singleton_method(:shutdown) { true }
+      sessions = UnoMachine::Sessions.new(
+        transport: transport,
+        allowlist: UnoMachine::Allowlist.new(%w[Alice Alice2])
+      )
+      plugin.instance_variable_set(:@machine_sessions, sessions)
+      game, alice, = started_game
+      plugin.instance_variable_get(:@games)['#one'] = game
+      sessions.attach_game(channel: '#one', game: game)
+      game.on_action_required do |current_game, player, reason|
+        sessions.action_required(current_game, player, reason)
+      end
+      expect(sessions.register(channel: '#one', game: game, nick: 'Alice')).to be_success
+      deliveries.clear
+      rename_entered = Queue.new
+      release_rename = Queue.new
+      allow(game).to receive(:rename_player).and_wrap_original do |original, old_nick, new_nick|
+        rename_entered << true
+        release_rename.pop
+        original.call(old_nick, new_nick)
+      end
+      changed_user = double('renamed user', last_nick: 'Alice', nick: 'Alice2')
+      nick_message = double('nick event', user: changed_user)
+      register_message = double('new nick registration', user: changed_user, channel: channel)
+
+      nick_thread = Thread.new { plugin.machine_nick_changed(nick_message) }
+      rename_entered.pop
+      register_thread = Thread.new { plugin.machine_register(register_message) }
+      expect(register_thread.join(0.05)).to be_nil
+
+      release_rename << true
+      nick_thread.value
+      register_thread.value
+
+      expect(alice).to be_matches('Alice2')
+      types = delivery_mutex.synchronize do
+        deliveries.map { |_, lines| lines.first.split[1] }
+      end
+      expect(types).to eq(%w[EVENT REGISTERED STATE])
+      event_delivery = delivery_mutex.synchronize { deliveries.first }
+      expect(event_delivery.first).to eq('Alice2')
+      expect(UnoMachine::Protocol.reassemble(event_delivery.last)['event']).to eq('nick_changed')
+      state_delivery = delivery_mutex.synchronize { deliveries.last }
+      expect(UnoMachine::Protocol.reassemble(state_delivery.last)['reason']).to eq('registration_sync')
+    ensure
+      release_rename << true if release_rename && release_rename.empty?
+      nick_thread&.join
+      register_thread&.join
+    end
+  end
+
   describe 'channel-scoped game state' do
     let(:broadcast) { double('broadcast', send: nil) }
     let(:notice) { double('notice', notice: nil) }

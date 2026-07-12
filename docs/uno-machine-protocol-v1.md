@@ -95,6 +95,9 @@ The JSON is not compressed and must encode this envelope:
 }
 ```
 
+`data` is limited to 384 Base64url characters. The host rejects any larger
+action before decoding it.
+
 The inner and outer IDs must match. The canonical action is passed unchanged
 to `Jedna::ActionExecutor`; play supports `card`, `wild_color`, and
 `double_play`, including double wild draw fours.
@@ -114,6 +117,17 @@ failure; all protocol, authorization, correlation, lifecycle, stale, and
 duplicate errors use `retry=0`. A successful draw consumes its decision and
 causes a new `card_drawn` decision. Play/pass proceeds through the engine and
 either creates the next turn decision or ends the game.
+
+Stable host error codes are `private_only`, `channel_only`, `no_game`,
+`not_allowlisted`, `not_player`, `game_changed`, `registration_taken`,
+`not_registered`, `unknown_game`, `game_ended`, `unauthorized`,
+`stale_decision`, `duplicate_decision`, `out_of_turn`, and `internal_error`.
+Protocol parsing can additionally return `malformed_action`, `invalid_game_id`,
+`invalid_decision_id`, `action_too_large`, `invalid_base64`, `malformed_json`,
+`unsupported_protocol`, or `correlation_mismatch`. Canonical executor failures
+use Jedna's versioned action result `code` (for example `action_unavailable` or
+`card_not_playable`) and are the retryable class. Clients must treat an unknown
+future code according to its explicit `retry` field rather than guessing.
 
 ## Host concurrency contract
 

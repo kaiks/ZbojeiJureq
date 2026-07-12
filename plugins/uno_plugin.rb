@@ -63,6 +63,7 @@ class UnoPlugin
   match /^jo$/,         group: :uno, method: :join, use_prefix: false
 
   match /^od$/,         group: :uno, method: :order, use_prefix: false
+  match /^us$/,         group: :uno, method: :status, use_prefix: false
 
   match /^pa$/,         group: :uno, method: :pass, use_prefix: false
   match /^pe$/,         group: :uno, method: :pick, use_prefix: false
@@ -82,6 +83,7 @@ class UnoPlugin
   match /uno debug (.*)/,    group: :uno, method: :debug
   match /uno score$/,   group: :uno, method: :own_score
   match /uno score ([A-Za-z0-9_\-]+)/, group: :uno, method: :score
+  match /uno status$/,  group: :uno, method: :status
 
   match /uno$/,         group: :uno, method: :start
   match /uno/,          group: :uno, method: :help
@@ -101,8 +103,10 @@ class UnoPlugin
 
   def testing(m)
     with_channel(m) do |channel|
-      @testing_channels[channel] = !@testing_channels[channel]
-      m.reply "Ok. Now set to #{@testing_channels[channel]}"
+      enabled = @games_monitor.synchronize do
+        @testing_channels[channel] = !@testing_channels[channel]
+      end
+      m.reply "Ok. Now set to #{enabled}"
     end
   end
 
@@ -130,14 +134,19 @@ class UnoPlugin
   def deal(m)
     with_game(m, notify: true) do |game, channel|
       if game.creator.to_s == m.user.nick
-        if @testing_channels[channel]
-          if @game_histories[channel].nil?
+        testing, history = @games_monitor.synchronize do
+          enabled = @testing_channels[channel]
+          [enabled, enabled ? @game_histories.delete(channel) : nil]
+        end
+        if testing
+          if history.nil?
             game.start_game
             if game.started?
-              @game_histories[channel] = UnoGameHistory.new(game.starting_stack, game.first_player)
+              @games_monitor.synchronize do
+                @game_histories[channel] = UnoGameHistory.new(game.starting_stack, game.first_player)
+              end
             end
           else
-            history = @game_histories.delete(channel)
             game.start_game history.stack, history.first_player
           end
         else
@@ -180,7 +189,7 @@ class UnoPlugin
     length = text.length
     length > 3 && length.even? &&
       (text[0..(length / 2 - 1)] == text[(length / 2)..length]) &&
-      text[1] != 'd' #even length, not a wd4
+      text[1] != 'd' # even length, not a wd4
   end
 
   def play(m)
@@ -217,11 +226,32 @@ class UnoPlugin
     start_game(m, casual: true)
   end
 
+  def status(m)
+    with_channel(m, error_target: :notice) do |channel|
+      game = @games_monitor.synchronize { @games[channel] }
+      unless game
+        m.user.notice 'UNO_STATUS_V1 error=no_game'
+        next
+      end
+
+      snapshot = human_status_snapshot(game, m.user.nick)
+      unless snapshot
+        m.user.notice 'UNO_STATUS_V1 error=not_player'
+        next
+      end
+
+      m.user.notice snapshot.fetch(:public)
+      m.user.notice snapshot.fetch(:private) if snapshot[:private]
+    end
+  end
+
   def stop(m)
     with_game(m, notify: true) do |game, channel|
       game.stop_game m.user.nick
-      @games.delete(channel)
-      @game_histories.delete(channel)
+      @games_monitor.synchronize do
+        @games.delete(channel) if @games[channel].equal?(game)
+        @game_histories.delete(channel)
+      end
       m.reply 'Uno game has been stopped.'
       upload_db if game.ranked?
     end
@@ -306,13 +336,22 @@ class UnoPlugin
 
   def start_game(m, casual:)
     with_channel(m) do |channel|
-      if @games[channel]
+      game = nil
+      created = @games_monitor.synchronize do
+        if @games[channel]
+          false
+        else
+          game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
+          @games[channel] = game
+          true
+        end
+      end
+
+      unless created
         m.reply 'An uno game is already being played in this channel.'
         next
       end
 
-      game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
-      @games[channel] = game
       casual_text = casual ? 'casual ' : ''
       m.reply "Ok, created #{casual_text}04U09N12O08! game on #{m.channel}, say 'jo' to join in"
       join_game(game, m)
@@ -331,19 +370,20 @@ class UnoPlugin
     game.players.first&.matches?(nick)
   end
 
-  def with_channel(m)
+  def with_channel(m, error_target: :reply)
     channel = m.channel&.name
     unless channel
-      m.reply 'Uno games can only be played in a channel.'
+      message = error_target == :notice ? 'UNO_STATUS_V1 error=channel_only' : 'Uno games can only be played in a channel.'
+      error_target == :notice ? m.user.notice(message) : m.reply(message)
       return
     end
 
-    @games_monitor.synchronize { yield normalize_channel(channel) }
+    yield normalize_channel(channel)
   end
 
   def with_game(m, notify: false)
     with_channel(m) do |channel|
-      game = @games[channel]
+      game = @games_monitor.synchronize { @games[channel] }
       if game
         yield game, channel
       elsif notify
@@ -354,5 +394,45 @@ class UnoPlugin
 
   def normalize_channel(channel)
     channel.to_s.downcase
+  end
+
+  def human_status_snapshot(game, requester_nick)
+    game.synchronize do
+      requester = game.players.find { |player| player.matches?(requester_nick) }
+      next unless requester
+
+      started = game.started?
+      phase = if started
+                'active'
+              elsif game.top_card
+                'ended'
+              else
+                'waiting'
+              end
+      current_player = started ? game.players.first : nil
+      fields = {
+        phase: phase,
+        current: current_player || '-',
+        top: game.top_card || '-',
+        mode: human_game_mode(game.game_state),
+        stacked_cards: game.stacked_cards,
+        already_picked: game.already_picked ? 1 : 0,
+        players: game.players.map { |player| "#{player}:#{player.hand.size}" }.join(',')
+      }
+      public_line = "UNO_STATUS_V1 #{fields.map { |key, value| "#{key}=#{value}" }.join(' ')}"
+      private_line = if current_player&.matches?(requester_nick)
+                       "UNO_STATUS_PRIVATE_V1 picked_card=#{game.picked_card || '-'}"
+                     end
+      { public: public_line, private: private_line }
+    end
+  end
+
+  def human_game_mode(game_state)
+    {
+      0 => 'off',
+      1 => 'normal',
+      2 => 'war_+2',
+      3 => 'war_wd4'
+    }.fetch(game_state, 'unknown')
   end
 end

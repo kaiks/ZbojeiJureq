@@ -89,6 +89,120 @@ RSpec.describe UnoPlugin do
 
       plugin.play(uppercase_message)
     end
+
+  end
+
+  describe '#status' do
+    def game_with_players
+      game = IrcUnoGame.new('Alice', 1)
+      alice = Jedna::Player.new('Alice')
+      bob = Jedna::Player.new('Bob')
+      game.players.replace([alice, bob])
+      [game, alice, bob]
+    end
+
+    def install_game(game)
+      plugin.instance_variable_get(:@games)['#one'] = game
+    end
+
+    it 'privately reports a deterministic active snapshot and the current player picked card' do
+      game, alice, bob = game_with_players
+      picked_card = Jedna::Card.new(:red, 5)
+      alice.hand << [picked_card, Jedna::Card.new(:blue, 7)]
+      bob.hand << Jedna::Card.new(:yellow, 2)
+      game.instance_variable_set(:@top_card, Jedna::Card.new(:green, 'wild+4'))
+      game.instance_variable_set(:@game_state, 3)
+      game.instance_variable_set(:@stacked_cards, 8)
+      game.instance_variable_set(:@already_picked, true)
+      game.instance_variable_set(:@picked_card, picked_card)
+      install_game(game)
+      message = double('status message', user: user, channel: channel)
+
+      expect(user).to receive(:notice).with(
+        'UNO_STATUS_V1 phase=active current=Alice top=wd4g mode=war_wd4 ' \
+        'stacked_cards=8 already_picked=1 players=Alice:2,Bob:1'
+      ) do
+        expect(plugin.instance_variable_get(:@games_monitor).mon_owned?).to be(false)
+      end
+      expect(user).to receive(:notice).with('UNO_STATUS_PRIVATE_V1 picked_card=r5')
+
+      plugin.status(message)
+    end
+
+    it 'never discloses the picked card to another player' do
+      game, alice, bob = game_with_players
+      picked_card = Jedna::Card.new(:red, 5)
+      alice.hand << picked_card
+      game.instance_variable_set(:@top_card, Jedna::Card.new(:red, 7))
+      game.instance_variable_set(:@game_state, 1)
+      game.instance_variable_set(:@already_picked, true)
+      game.instance_variable_set(:@picked_card, picked_card)
+      install_game(game)
+      bob_user = double('Bob', nick: 'Bob')
+      message = double('Bob status message', user: bob_user, channel: channel)
+
+      expect(bob_user).to receive(:notice).once.with(
+        'UNO_STATUS_V1 phase=active current=Alice top=r7 mode=normal ' \
+        'stacked_cards=0 already_picked=1 players=Alice:1,Bob:0'
+      )
+
+      plugin.status(message)
+    end
+
+    it 'reports a pre-deal game without inventing a current player' do
+      game, = game_with_players
+      install_game(game)
+      message = double('status message', user: user, channel: channel)
+
+      expect(user).to receive(:notice).with(
+        'UNO_STATUS_V1 phase=waiting current=- top=- mode=off ' \
+        'stacked_cards=0 already_picked=0 players=Alice:0,Bob:0'
+      )
+
+      plugin.status(message)
+    end
+
+    it 'reports an ended game object explicitly' do
+      game, = game_with_players
+      game.instance_variable_set(:@top_card, Jedna::Card.new(:red, 7))
+      install_game(game)
+      message = double('status message', user: user, channel: channel)
+
+      expect(user).to receive(:notice).with(
+        'UNO_STATUS_V1 phase=ended current=- top=r7 mode=off ' \
+        'stacked_cards=0 already_picked=0 players=Alice:0,Bob:0'
+      )
+
+      plugin.status(message)
+    end
+
+    it 'returns private errors for a nonplayer, a missing game, and a private-message invocation' do
+      game, = game_with_players
+      install_game(game)
+      stranger = double('stranger', nick: 'Mallory')
+
+      expect(stranger).to receive(:notice).with('UNO_STATUS_V1 error=not_player')
+      plugin.status(double('nonplayer status', user: stranger, channel: channel))
+
+      plugin.instance_variable_get(:@games).delete('#one')
+      expect(stranger).to receive(:notice).with('UNO_STATUS_V1 error=no_game')
+      plugin.status(double('missing status', user: stranger, channel: channel))
+
+      expect(stranger).to receive(:notice).with('UNO_STATUS_V1 error=channel_only')
+      plugin.status(double('private status', user: stranger, channel: nil))
+    end
+
+    it 'reports no game after a game is stopped' do
+      game, = game_with_players
+      install_game(game)
+      message = double('stop/status message', user: user, channel: channel)
+      allow(message).to receive(:reply)
+
+      plugin.stop(message)
+
+      expect(user).to receive(:notice).with('UNO_STATUS_V1 error=no_game')
+      plugin.status(message)
+    end
   end
 
   describe '#reload' do
@@ -132,6 +246,13 @@ RSpec.describe UnoPlugin do
       expect(quit_matcher.method).to eq(:stop)
       expect(top_matchers.size).to eq(1)
       expect(matchers.map(&:method)).not_to include(:temp)
+    end
+
+    it 'registers both human status commands' do
+      matchers = described_class.matchers
+      status_patterns = matchers.select { |matcher| matcher.method == :status }.map { |matcher| matcher.pattern.source }
+
+      expect(status_patterns).to contain_exactly('^us$', 'uno status$')
     end
   end
 

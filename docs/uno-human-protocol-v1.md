@@ -69,7 +69,8 @@ UNO_STATUS_V1 phase=ended current=- top=r7 mode=off stacked_cards=0 already_pick
 
 Each status is captured under the individual game's monitor, so all fields in
 one response describe the same engine state. IRC delivery happens after the
-snapshot has been captured and without holding the plugin-wide games monitor.
+snapshot has been captured and without holding either the plugin-wide games
+monitor or the channel's lifecycle monitor.
 
 ## Reconnection assumption
 

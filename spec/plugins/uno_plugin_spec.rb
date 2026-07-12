@@ -59,6 +59,7 @@ RSpec.describe UnoPlugin do
     plugin.instance_variable_set(:@game_histories, {})
     plugin.instance_variable_set(:@testing_channels, Hash.new(false))
     plugin.instance_variable_set(:@games_monitor, Monitor.new)
+    plugin.instance_variable_set(:@channel_monitors, {})
   end
 
   describe '#play' do
@@ -155,14 +156,19 @@ RSpec.describe UnoPlugin do
       game.instance_variable_set(:@picked_card, picked_card)
       install_game(game)
       message = double('status message', user: user, channel: channel)
+      channel_monitor = plugin.send(:channel_lifecycle_monitor, '#one')
 
       expect(user).to receive(:notice).with(
         'UNO_STATUS_V1 phase=active current=Alice top=wd4g mode=war_wd4 ' \
         'stacked_cards=8 already_picked=1 players=Alice:2,Bob:1'
       ) do
         expect(plugin.instance_variable_get(:@games_monitor).mon_owned?).to be(false)
+        expect(channel_monitor.mon_owned?).to be(false)
       end
-      expect(user).to receive(:notice).with('UNO_STATUS_PRIVATE_V1 picked_card=r5')
+      expect(user).to receive(:notice).with('UNO_STATUS_PRIVATE_V1 picked_card=r5') do
+        expect(plugin.instance_variable_get(:@games_monitor).mon_owned?).to be(false)
+        expect(channel_monitor.mon_owned?).to be(false)
+      end
 
       plugin.status(message)
     end
@@ -332,6 +338,90 @@ RSpec.describe UnoPlugin do
 
       expect(creations).to eq(1)
       expect(plugin.instance_variable_get(:@games).size).to eq(1)
+    end
+
+    it 'finishes a same-channel join before a racing stop removes the game' do
+      bob = double('bob', nick: 'Bob')
+      join_message = double('join message', user: bob, channel: channel)
+      stop_message = double('stop message', user: user, channel: channel, reply: nil)
+      lookup_started = Queue.new
+      continue_join = Queue.new
+      actions = Queue.new
+      game = instance_double(IrcUnoGame, ranked?: false)
+      allow(game).to receive(:players) do
+        lookup_started << true
+        continue_join.pop
+        []
+      end
+      allow(game).to receive(:add_player) { actions << :join }
+      allow(game).to receive(:stop_game) { actions << :stop }
+      plugin.instance_variable_get(:@games)['#one'] = game
+
+      join_thread = Thread.new { plugin.join(join_message) }
+      lookup_started.pop
+      stop_thread = Thread.new { plugin.stop(stop_message) }
+
+      expect(stop_thread.join(0.05)).to be_nil
+      continue_join << true
+      join_thread.value
+      stop_thread.value
+
+      expect([actions.pop, actions.pop]).to eq(%i[join stop])
+      expect(plugin.instance_variable_get(:@games)).not_to have_key('#one')
+    ensure
+      continue_join << true if continue_join&.empty? && join_thread&.alive?
+      join_thread&.join
+      stop_thread&.join
+    end
+
+    it 'does not serialize commands in different channels' do
+      other_channel = double('other channel', name: '#two', to_s: '#two')
+      bob = double('bob', nick: 'Bob')
+      carol = double('carol', nick: 'Carol')
+      first_message = double('first join message', user: bob, channel: channel)
+      second_message = double('second join message', user: carol, channel: other_channel)
+      first_started = Queue.new
+      release_first = Queue.new
+      second_finished = Queue.new
+      first_game = instance_double(IrcUnoGame)
+      second_game = instance_double(IrcUnoGame, players: [])
+      allow(first_game).to receive(:players) do
+        first_started << true
+        release_first.pop
+        []
+      end
+      allow(first_game).to receive(:add_player)
+      allow(second_game).to receive(:add_player) { second_finished << true }
+      plugin.instance_variable_get(:@games).merge!('#one' => first_game, '#two' => second_game)
+
+      first_thread = Thread.new { plugin.join(first_message) }
+      first_started.pop
+      second_thread = Thread.new { plugin.join(second_message) }
+
+      expect(second_thread.join(0.5)).to eq(second_thread)
+      expect(second_finished.pop).to be(true)
+      release_first << true
+      first_thread.value
+      second_thread.value
+    ensure
+      release_first << true if release_first&.empty? && first_thread&.alive?
+      first_thread&.join
+      second_thread&.join
+    end
+
+    it 'removes an ended game reentrantly from a same-channel game command' do
+      game = IrcUnoGame.new('Alice', 1)
+      plugin.instance_variable_get(:@games)['#one'] = game
+      channel_monitor = plugin.send(:channel_lifecycle_monitor, '#one')
+      allow(bot).to receive(:send_to_ftp)
+
+      channel_monitor.synchronize do
+        game.synchronize do
+          plugin.game_ended('#one', game, upload: false)
+        end
+      end
+
+      expect(plugin.instance_variable_get(:@games)).not_to have_key('#one')
     end
 
     it 'plays a casual game through start, join, deal, and stop' do

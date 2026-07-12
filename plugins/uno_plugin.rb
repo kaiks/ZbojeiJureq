@@ -94,6 +94,7 @@ class UnoPlugin
     @game_histories = {}
     @testing_channels = Hash.new(false)
     @games_monitor = Monitor.new
+    @channel_monitors = {}
   end
 
   def debug(m, text)
@@ -103,10 +104,12 @@ class UnoPlugin
 
   def testing(m)
     with_channel(m) do |channel|
-      enabled = @games_monitor.synchronize do
-        @testing_channels[channel] = !@testing_channels[channel]
+      channel_lifecycle_monitor(channel).synchronize do
+        enabled = @games_monitor.synchronize do
+          @testing_channels[channel] = !@testing_channels[channel]
+        end
+        m.reply "Ok. Now set to #{enabled}"
       end
-      m.reply "Ok. Now set to #{enabled}"
     end
   end
 
@@ -227,20 +230,22 @@ class UnoPlugin
 
   def status(m)
     with_channel(m, error_target: :notice) do |channel|
-      game = @games_monitor.synchronize { @games[channel] }
-      unless game
-        m.user.notice 'UNO_STATUS_V1 error=no_game'
+      result = channel_lifecycle_monitor(channel).synchronize do
+        game = @games_monitor.synchronize { @games[channel] }
+        if game
+          human_status_snapshot(game, m.user.nick) || { error: 'not_player' }
+        else
+          { error: 'no_game' }
+        end
+      end
+
+      if result[:error]
+        m.user.notice "UNO_STATUS_V1 error=#{result[:error]}"
         next
       end
 
-      snapshot = human_status_snapshot(game, m.user.nick)
-      unless snapshot
-        m.user.notice 'UNO_STATUS_V1 error=not_player'
-        next
-      end
-
-      m.user.notice snapshot.fetch(:public)
-      m.user.notice snapshot.fetch(:private) if snapshot[:private]
+      m.user.notice result.fetch(:public)
+      m.user.notice result.fetch(:private) if result[:private]
     end
   end
 
@@ -273,11 +278,14 @@ class UnoPlugin
   end
 
   def game_ended(channel_name, game, upload:)
-    upload_db if upload
-    @games_monitor.synchronize do
-      channel = normalize_channel(channel_name)
-      @games.delete(channel) if @games[channel].equal?(game)
+    channel = normalize_channel(channel_name)
+    channel_lifecycle_monitor(channel).synchronize do
+      @games_monitor.synchronize do
+        @games.delete(channel) if @games[channel].equal?(game)
+        @game_histories.delete(channel)
+      end
     end
+    upload_db if upload
     @bot.send_to_ftp './uno.db', '', 'unodb'
   end
 
@@ -335,25 +343,27 @@ class UnoPlugin
 
   def start_game(m, casual:)
     with_channel(m) do |channel|
-      game = nil
-      created = @games_monitor.synchronize do
-        if @games[channel]
-          false
-        else
-          game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
-          @games[channel] = game
-          true
+      channel_lifecycle_monitor(channel).synchronize do
+        game = nil
+        created = @games_monitor.synchronize do
+          if @games[channel]
+            false
+          else
+            game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
+            @games[channel] = game
+            true
+          end
         end
-      end
 
-      unless created
-        m.reply 'An uno game is already being played in this channel.'
-        next
-      end
+        unless created
+          m.reply 'An uno game is already being played in this channel.'
+          next
+        end
 
-      casual_text = casual ? 'casual ' : ''
-      m.reply "Ok, created #{casual_text}04U09N12O08! game on #{m.channel}, say 'jo' to join in"
-      join_game(game, m)
+        casual_text = casual ? 'casual ' : ''
+        m.reply "Ok, created #{casual_text}04U09N12O08! game on #{m.channel}, say 'jo' to join in"
+        join_game(game, m)
+      end
     end
   end
 
@@ -382,12 +392,21 @@ class UnoPlugin
 
   def with_game(m, notify: false)
     with_channel(m) do |channel|
-      game = @games_monitor.synchronize { @games[channel] }
-      if game
-        yield game, channel
-      elsif notify
-        m.reply 'No uno game is running in this channel.'
+      channel_lifecycle_monitor(channel).synchronize do
+        game = @games_monitor.synchronize { @games[channel] }
+        if game
+          yield game, channel
+        elsif notify
+          m.reply 'No uno game is running in this channel.'
+        end
       end
+    end
+  end
+
+  def channel_lifecycle_monitor(channel)
+    @games_monitor.synchronize do
+      @channel_monitors ||= {}
+      @channel_monitors[channel] ||= Monitor.new
     end
   end
 

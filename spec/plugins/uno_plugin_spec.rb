@@ -92,6 +92,25 @@ RSpec.describe UnoPlugin do
     end
   end
 
+  describe '#score' do
+    it 'reports a missing player without raising' do
+      message = double('message')
+      allow(UnoRankModel).to receive(:[]).with('Missing').and_return(nil)
+      expect(message).to receive(:reply).with('No uno score found for Missing.')
+
+      expect { plugin.score(message, 'Missing') }.not_to raise_error
+    end
+
+    it 'formats a stored player score' do
+      message = double('message')
+      rank = double('rank', nick: 'Alice', total_score: 125, games: 10, wins: 4)
+      allow(UnoRankModel).to receive(:[]).with('Alice').and_return(rank)
+      expect(message).to receive(:reply).with('Alice: 12.5 avg 125 pts 10 games 4 wins 40.0% winrate')
+
+      plugin.score(message, 'Alice')
+    end
+  end
+
   describe 'command registration' do
     it 'routes quit to stop and has one leaderboard matcher' do
       matchers = described_class.matchers

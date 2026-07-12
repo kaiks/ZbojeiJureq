@@ -264,15 +264,19 @@ class UnoPlugin
     end
   end
 
-  #todo: fix formatting
   def score(m, user)
-    r = UNODB['SELECT *, ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2) FROM uno WHERE nick = ?',user].first
-    games = r[:games]
-    wins = r[:wins]
-    winrate = winrate(games, wins)
+    rank = UnoRankModel[user]
+    unless rank
+      m.reply "No uno score found for #{user}."
+      return
+    end
 
-    avg = r[:'ROUND(CAST(total_score AS FLOAT)/CAST(games AS FLOAT),2)']
-    m.reply "#{r[:nick]}: #{avg} avg #{r[:total_score]} pts #{games} games #{wins} wins #{winrate}% winrate"
+    games = rank.games.to_i
+    wins = rank.wins.to_i
+    total_score = rank.total_score.to_i
+    average = games.zero? ? 0.0 : (total_score.to_f / games).round(2)
+
+    m.reply "#{rank.nick}: #{average} avg #{total_score} pts #{games} games #{wins} wins #{winrate(games, wins)}% winrate"
   end
 
   def own_score(m)

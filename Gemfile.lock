@@ -48,6 +48,7 @@ GEM
     llhttp-ffi (0.5.1)
       ffi-compiler (~> 1.0)
       rake (~> 13.0)
+    logger (1.7.0)
     mini_portile2 (2.8.9)
     money (6.19.0)
       i18n (>= 0.6.4, <= 2)
@@ -100,6 +101,7 @@ DEPENDENCIES
   dentaku
   http
   jedna!
+  logger
   money
   money-oxr
   net-ftp

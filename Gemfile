@@ -26,6 +26,7 @@ gem 'jedna', github: 'kaiks/jedna'
 
 # Extracted standard libraries required on current Ruby versions
 gem 'base64' if RUBY_VERSION >= '3.4'
+gem 'logger' if RUBY_VERSION >= '4.0'
 gem 'net-ftp' if RUBY_VERSION >= '3.1'
 gem 'ostruct' if RUBY_VERSION >= '4.0'
 

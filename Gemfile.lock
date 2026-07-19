@@ -6,7 +6,7 @@ GIT
 
 GIT
   remote: https://github.com/kaiks/jedna.git
-  revision: 17ada2012112abf1df2cd2a31342fcad2f3ed18a
+  revision: 6ff228af06d8378e7039ed3ebcdf1b950f97afca
   specs:
     jedna (0.1.0)
       monitor (~> 0.1)

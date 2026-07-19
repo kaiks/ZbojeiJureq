@@ -2,6 +2,7 @@ require 'monitor'
 require 'jedna'
 require 'jedna/interfaces/irc_notifier'
 require './plugins/uno/uno_db.rb'
+require './plugins/uno/game_rules'
 require './plugins/uno/machine_dispatcher'
 require './plugins/uno/machine_sessions'
 require './config.rb'
@@ -12,7 +13,8 @@ class IrcUnoGame < Jedna::Game
 
   attr_reader :channel
   
-  def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil)
+  def initialize(creator, casual = 0, irc = nil, channel = '#kx', plugin = nil,
+                 two_player_reverse_acts_as_skip: false)
     @channel = channel
     @ranked = casual != 1
     notifier = Jedna::IrcNotifier.new(irc, channel) if irc
@@ -27,7 +29,14 @@ class IrcUnoGame < Jedna::Game
                      rank_model: UnoRankModel
                    )
                  end
-    super(creator, casual, notifier, renderer, repository)
+    super(
+      creator,
+      casual,
+      notifier,
+      renderer,
+      repository,
+      two_player_reverse_acts_as_skip: two_player_reverse_acts_as_skip
+    )
     
     # Set up the hook for game ended
     on_game_ended do
@@ -502,7 +511,15 @@ class UnoPlugin
           next
         end
 
-        game = IrcUnoGame.new(m.user.nick, casual ? 1 : 0, @bot, m.channel.name, self)
+        reverse_acts_as_skip = UnoRules.two_player_reverse_acts_as_skip?(config: CONFIG)
+        game = IrcUnoGame.new(
+          m.user.nick,
+          casual ? 1 : 0,
+          @bot,
+          m.channel.name,
+          self,
+          two_player_reverse_acts_as_skip: reverse_acts_as_skip
+        )
         @machine_sessions&.attach_game(channel: channel, game: game)
         @games_monitor.synchronize { @games[channel] = game }
 

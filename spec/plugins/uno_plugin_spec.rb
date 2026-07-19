@@ -45,6 +45,23 @@ RSpec.describe IrcUnoGame do
     expect(game.instance_variable_get(:@__monitor)).to be_a(Monitor)
     expect(game.method(:add_player).owner).not_to eq(Jedna::Game)
   end
+
+  it 'can make Reverse act as Skip in a two-player game' do
+    game = described_class.new('Alice', 1, two_player_reverse_acts_as_skip: true)
+    alice = Jedna::Player.new('Alice')
+    bob = Jedna::Player.new('Bob')
+    reverse_card = Jedna::Card.new(:red, 'reverse')
+    alice.hand << [reverse_card, Jedna::Card.new(:blue, 5)]
+    bob.hand << Jedna::Card.new(:yellow, 2)
+    game.players.replace([alice, bob])
+    game.instance_variable_set(:@played_cards, Jedna::CardStack.new)
+    game.instance_variable_set(:@top_card, Jedna::Card.new(:red, 7))
+    game.instance_variable_set(:@game_state, 1)
+
+    game.player_card_play(alice, reverse_card)
+
+    expect(game.players.first).to eq(alice)
+  end
 end
 
 RSpec.describe UnoPlugin do
@@ -500,10 +517,10 @@ RSpec.describe UnoPlugin do
     it 'creates only one game when starts race in the same channel' do
       message = double('message', user: user, channel: channel, reply: nil)
       creations = 0
-      allow(IrcUnoGame).to receive(:new).and_wrap_original do |original, *args|
+      allow(IrcUnoGame).to receive(:new).and_wrap_original do |original, *args, **kwargs|
         creations += 1
         sleep 0.01
-        original.call(*args)
+        original.call(*args, **kwargs)
       end
 
       threads = 2.times.map { Thread.new { plugin.start_casual(message) } }

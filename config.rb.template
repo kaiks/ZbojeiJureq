@@ -20,6 +20,11 @@ CONFIG = {
     # UNO_MACHINE_ALLOWLIST environment variable takes precedence.
     'uno_machine_allowlist' => [],
 
+    # In a two-player game, make Reverse skip the opponent and leave the turn
+    # with the player who used it. UNO_TWO_PLAYER_REVERSE_ACTS_AS_SKIP takes
+    # precedence and accepts true/false, yes/no, on/off, or 1/0.
+    'uno_two_player_reverse_acts_as_skip' => false,
+
     'ftp_upload'            => false,
     'ftp_login'             => '',
     'ftp_password'          => '',

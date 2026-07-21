@@ -4,11 +4,15 @@ cinch-based irc bot with many plugins
 Currently runs on mri (tested on 4.0.5) and should work on all distributions on which gems run (e.g. some versions of jruby)
 
 ## Installation
-To install, first install bundle, and then:
+Install the bundle, create the runtime database directory, and copy the
+configuration and empty database templates into their expected locations:
 
     bundle install
-
-Then delete .template file extension from all template files.
+    cp config.rb.template config.rb
+    mkdir -p db logs
+    cp ZbojeiJureq.db.template db/ZbojeiJureq.db
+    cp talk.db.template db/talk.db
+    cp uno.db.template db/uno.db
 
 ## Configuration
 To configure, you'll need to edit config.rb

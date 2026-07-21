@@ -119,7 +119,7 @@ class TalkPlugin
   end
 
   def upload
-    @bot.upload_to_dropbox './talk.db'
+    @bot.upload_to_dropbox @talkdb.opts.fetch(:database)
   end
 
 

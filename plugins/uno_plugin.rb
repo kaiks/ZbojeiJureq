@@ -406,7 +406,7 @@ class UnoPlugin
       end
     end
     upload_db if upload
-    @bot.send_to_ftp './uno.db', '', 'unodb'
+    @bot.send_to_ftp UNODB.opts.fetch(:database), '', 'unodb'
   end
 
   def help(m)
@@ -455,8 +455,9 @@ class UnoPlugin
 
   def upload_db
     #todo: ftp
-    @bot.upload_to_dropbox './uno.db'
-    @bot.send_to_ftp('./uno.db')
+    database_path = UNODB.opts.fetch(:database)
+    @bot.upload_to_dropbox database_path
+    @bot.send_to_ftp(database_path)
   end
 
   private

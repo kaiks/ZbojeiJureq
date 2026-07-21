@@ -23,7 +23,7 @@ class CorePlugin
   timer CONFIG['maindb_upload_delay'], method: :upload_general_db
 
   def upload_general_db
-    @bot.upload_to_dropbox './ZbojeiJureq.db'
+    @bot.upload_to_dropbox DB.opts.fetch(:database)
   end
 
   def nick_check

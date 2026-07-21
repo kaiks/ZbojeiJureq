@@ -81,7 +81,7 @@ class TimerPlugin
 
 
   def timer_note(m, amount, scale, text)
-    amount = amount.to_i
+    amount = amount.to_f
 
     case scale
       when 'd'

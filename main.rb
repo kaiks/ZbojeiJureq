@@ -49,8 +49,14 @@ $bot = Cinch::Bot.new do
 
 end
 
-if CONFIG['use_rollbar']
-  $bot.loggers << Cinch::Logger::RollbarLogger.new(nil)
-  $bot.loggers[1].level = :error
+if CONFIG['use_opentelemetry']
+  require 'opentelemetry/sdk'
+  require 'opentelemetry-exporter-otlp'
+
+  OpenTelemetry::SDK.configure do |otel|
+    otel.service_name = CONFIG.fetch('opentelemetry_service_name', 'zbojeijureq')
+  end
+  tracer = OpenTelemetry.tracer_provider.tracer('zbojeijureq.cinch')
+  $bot.loggers << Cinch::Logger::OpenTelemetryLogger.new(tracer: tracer)
 end
 $bot.start

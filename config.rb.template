@@ -42,14 +42,8 @@ CONFIG = {
     # BTC Plugin configuration (optional)
     # 'btc_channel'           => '#kx',  # Channel for BTC price updates (default: #kx)
     
-    'use_rollbar'           => false,
-    'rollbar_api_key'       => 'YOUR_API_KEY'
+    # Exports error spans using the standard OTEL_EXPORTER_OTLP_* environment
+    # variables when enabled.
+    'use_opentelemetry'     => false,
+    'opentelemetry_service_name' => 'zbojeijureq'
 }
-
-if CONFIG['use_rollbar']
-  require 'rollbar'
-
-  Rollbar.configure do |config|
-    config.access_token = CONFIG['rollbar_api_key']
-  end
-end

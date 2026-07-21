@@ -8,7 +8,7 @@ CONFIG = {
     'channels'              => ['#kx'],
     'server'                => 'localhost',
     'verbose'               => true,
-    'message_per_second'    => 1,
+    'messages_per_second'   => 1,
 
     'disable_autoload'      => false,
 

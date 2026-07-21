@@ -1,22 +1,25 @@
 require 'spec_helper'
 require 'cinch'
+require 'tmpdir'
 require_relative '../../plugins/logger_plugin'
 
 RSpec.describe LoggerPlugin do
   let(:plugin) { described_class.allocate }
 
   describe '#find_results_in_log' do
-    it 'passes untrusted patterns to ripgrep without a shell' do
-      plugin.instance_variable_set(:@filepath, 'logs/#kx.log')
-      status = instance_double(Process::Status, success?: true, exitstatus: 0)
-      pattern = "quote'; unwanted-command"
+    it 'searches with ripgrep without executing shell syntax in the pattern' do
+      Dir.mktmpdir do |directory|
+        log_path = File.join(directory, 'channel.log')
+        marker_path = File.join(directory, 'shell-command-ran')
+        File.write(log_path, "before\nneedle\nafter\n")
+        plugin.instance_variable_set(:@filepath, log_path)
 
-      expect(Open3).to receive(:capture3).with(
-        'rg', '-P', '--context', '2', '--',
-        "(?<!\\.log old )#{pattern}", 'logs/#kx.log'
-      ).and_return(["match\n", '', status])
+        expect(plugin.find_results_in_log('needle', 1)).to include('before', 'needle', 'after')
 
-      expect(plugin.find_results_in_log(pattern, 2)).to eq("match\n")
+        malicious_pattern = "'; touch #{marker_path}; #"
+        plugin.find_results_in_log(malicious_pattern, 0)
+        expect(File).not_to exist(marker_path)
+      end
     end
   end
 

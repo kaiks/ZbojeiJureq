@@ -6,6 +6,7 @@
 require 'cinch'
 require 'digest/sha1'
 require 'fileutils'
+require 'open3'
 
 # based on Logging Plugin:
 # == Logging Plugin Authors
@@ -42,7 +43,7 @@ class LoggerPlugin
   listen_to :channel,    method: :log_public_message
   timer 60,              method: :check_midnight
 
-  match(/^.log old (.*)/, method: :find_old, use_prefix: false)
+  match(/^\.log old (.*)/, method: :find_old, use_prefix: false)
 
   LOG_FILENAME = '#kx.log'.freeze
   RELATIVE_RETRIEVED_LOG_DIR = "tmp_files".freeze
@@ -63,7 +64,6 @@ class LoggerPlugin
   end
 
   def cleanup(*)
-    @logfile.close
     bot.debug("Closed message logfile at #{@filename}.")
   end
 
@@ -114,11 +114,17 @@ class LoggerPlugin
     fragments = results.split(/^--$/).map { |result| LogFragment.new(result) }
     fragments[0..3].each { |fragment| m.reply fragment }
 
-    remaining_results_response(results, m) if results.length > 4
+    remaining_results_response(results, m) if fragments.length > 4
   end
 
   def find_results_in_log(pattern, context = 0)
-    `rg -P '(?<!\.log old )#{pattern}' logs/#{LOG_FILENAME} --context #{context}`
+    stdout, _stderr, status = Open3.capture3(
+      'rg', '-P', '--context', context.to_s, '--',
+      "(?<!\\.log old )#{pattern}", @filepath
+    )
+    return stdout if status.success? || status.exitstatus == 1
+
+    ''
   end
 
   def remaining_results_response(results, m)

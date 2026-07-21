@@ -48,17 +48,11 @@ GEM
     http-cookie (1.0.8)
       domain_name (~> 0.5)
     http-form_data (2.3.0)
-    i18n (1.14.7)
-      concurrent-ruby (~> 1.0)
     llhttp-ffi (0.5.1)
       ffi-compiler (~> 1.0)
       rake (~> 13.0)
     logger (1.7.0)
     mini_portile2 (2.8.9)
-    money (6.19.0)
-      i18n (>= 0.6.4, <= 2)
-    money-oxr (0.4.3)
-      money (>= 6.13.5)
     monitor (0.2.0)
     net-ftp (0.3.8)
       net-protocol
@@ -127,8 +121,6 @@ DEPENDENCIES
   http
   jedna!
   logger
-  money
-  money-oxr
   net-ftp
   opentelemetry-exporter-otlp
   opentelemetry-sdk

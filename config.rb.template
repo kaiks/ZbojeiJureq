@@ -45,5 +45,11 @@ CONFIG = {
     # Exports error spans using the standard OTEL_EXPORTER_OTLP_* environment
     # variables when enabled.
     'use_opentelemetry'     => false,
-    'opentelemetry_service_name' => 'zbojeijureq'
+    'opentelemetry_service_name' => 'zbojeijureq',
+    # Users the first-message spam filter never bans. Plain nicks ('Osk-') or
+    # nick!ident@host masks with * and ? wildcards ('*!~dsaf@*'). Users with an
+    # access level in the bot database and channel ops are skipped anyway.
+    # The comma-separated SPAM_FILTER_WHITELIST environment variable takes
+    # precedence.
+    'spam_filter_whitelist' => ['*!*@*.users.quakenet.org']
 }

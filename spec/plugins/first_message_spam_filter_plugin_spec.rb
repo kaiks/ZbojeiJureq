@@ -21,6 +21,8 @@ RSpec.describe FirstMessageSpamFilterPlugin do
   JOIN_RACE_MESSAGE = "Hi Guys! It's Madeleine Czura! Just thought I'd leave my number here in case you're lonely ;) . You can reach me on +44-7599248843 or maddyczura@gmail.com or madeleine.czura@arcadis.com anytime! > Linkedin: uk.linkedin.com/in/maddy-czura Instagram: instagram.com/maddy_czura".freeze
 
   FakeUser = Struct.new(:nick, :mask)
+  FakeIdentUser = Struct.new(:nick, :mask, :user)
+  FakeAuthUser = Struct.new(:nick, :mask, :authorized?)
   FakeMessage = Struct.new(:user, :channel, :message)
   FakeBot = Struct.new(:nick)
 
@@ -83,9 +85,9 @@ RSpec.describe FirstMessageSpamFilterPlugin do
 
     it 'tracks joins per channel instead of by nick alone' do
       detector.track_join('#other', user_key, at: current_time)
-      expect(detector.spam_detected?('#other', user_key, SPAM_TRANSCRIPT.first, at: current_time)).to be(false)
+      expect(detector.spam_detected?('#other', user_key, SPAM_TRANSCRIPT[1], at: current_time)).to be(false)
 
-      detected = detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: current_time)
+      detected = detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[4], at: current_time)
 
       expect(detected).to be(false)
     end
@@ -94,7 +96,7 @@ RSpec.describe FirstMessageSpamFilterPlugin do
       detector.track_join('#kx', user_key, at: current_time)
       expired_time = current_time + FirstMessageSpamFilterPlugin::TRACKING_TIMEOUT + 1
 
-      detected = detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT.first, at: expired_time)
+      detected = detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: expired_time)
 
       expect(detected).to be(false)
     end
@@ -107,7 +109,59 @@ RSpec.describe FirstMessageSpamFilterPlugin do
         expect(short_window.spam_detected?('#kx', user_key, 'hello there', at: current_time)).to be(false)
       end
 
-      expect(short_window.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT.first, at: current_time)).to be(false)
+      expect(short_window.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: current_time)).to be(false)
+    end
+
+    it 'bans on the first spam line when the target name comes with another signal' do
+      detector.track_join('#kx', user_key, at: current_time)
+
+      expect(detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT.first, at: current_time)).to be(true)
+    end
+
+    it 'does not ban someone who only mentions the target name' do
+      detector.track_join('#kx', user_key, at: current_time)
+
+      expect(detector.spam_detected?('#kx', user_key, 'znowu ten spam o madeleine czura', at: current_time)).to be(false)
+    end
+  end
+
+  describe FirstMessageSpamFilterPlugin::JoinFingerprint do
+    it 'matches the spam bot joins from the log' do
+      expect(described_class.suspicious?('persistentlizar', '~persisten')).to be(true)
+      expect(described_class.suspicious?('rudebovidBrenna', '~rudebovid')).to be(true)
+      expect(described_class.suspicious?('sovietcobraElbe', '~sovietcob')).to be(true)
+    end
+
+    it 'ignores regular users' do
+      expect(described_class.suspicious?('Osk-', '~dsaf')).to be(false)
+      expect(described_class.suspicious?('kowalskijan', '~kowalskij')).to be(false)
+      expect(described_class.suspicious?('kowalskijanwroc', 'kowalskij')).to be(false)
+      expect(described_class.suspicious?('kowalskijanwroc', '~other')).to be(false)
+    end
+  end
+
+  describe FirstMessageSpamFilterPlugin::Whitelist do
+    it 'matches plain nicks case-insensitively' do
+      whitelist = described_class.new(['Osk-'])
+
+      expect(whitelist.include?('osk-', 'osk-!~dsaf@80.94.23.248')).to be(true)
+      expect(whitelist.include?('rudebovidBrenna', 'rudebovidBrenna!~rudebovid@185.192.16.54')).to be(false)
+    end
+
+    it 'matches nick!ident@host masks with wildcards' do
+      whitelist = described_class.new('*!*@*.users.quakenet.org, *!~dsaf@*')
+
+      expect(whitelist.include?('someone', 'someone!~x@kaiks.users.quakenet.org')).to be(true)
+      expect(whitelist.include?('Osk-', 'Osk-!~dsaf@1.2.3.4')).to be(true)
+      expect(whitelist.include?('rudebovidBrenna', 'rudebovidBrenna!~rudebovid@185.192.16.54')).to be(false)
+    end
+
+    it 'prefers the environment variable over the config' do
+      whitelist = described_class.from(config: { 'spam_filter_whitelist' => ['FromConfig'] },
+                                       env: { 'SPAM_FILTER_WHITELIST' => 'FromEnv' })
+
+      expect(whitelist.include?('FromEnv')).to be(true)
+      expect(whitelist.include?('FromConfig')).to be(false)
     end
   end
 
@@ -122,6 +176,38 @@ RSpec.describe FirstMessageSpamFilterPlugin do
       plugin.instance_variable_set(:@bot, FakeBot.new('ZbojeiJureq'))
       plugin.instance_variable_set(:@detector, described_class::DetectionWindow.new(clock: -> { current_time }))
       plugin.instance_variable_set(:@moderator, described_class::ChannelModerator.new(log_io: log_io))
+      plugin.instance_variable_set(:@whitelist, described_class::Whitelist.new(whitelist_entries))
+    end
+
+    let(:whitelist_entries) { [] }
+    let(:spam_bot) { FakeIdentUser.new('rudebovidBrenna', 'rudebovidBrenna!~rudebovid@185.192.16.54', '~rudebovid') }
+
+    it 'bans a spam bot right on join by its nick/ident fingerprint' do
+      plugin.track_join(FakeMessage.new(spam_bot, channel, nil))
+
+      expect(channel.bans).to eq(['*!*@185.192.16.54'])
+      expect(channel.kicks).to eq([['rudebovidBrenna', 'Spam detected (automated ban)']])
+      expect(log_io.string).to include('[join fingerprint]')
+    end
+
+    context 'with a whitelisted user' do
+      let(:whitelist_entries) { ['rudebovidBrenna'] }
+
+      it 'does not ban on join or on spam-looking messages' do
+        plugin.track_join(FakeMessage.new(spam_bot, channel, nil))
+        SPAM_TRANSCRIPT.each { |line| plugin.check_first_message(FakeMessage.new(spam_bot, channel, line)) }
+
+        expect(channel.bans).to be_empty
+        expect(channel.kicks).to be_empty
+      end
+    end
+
+    it 'skips users with an access level in the bot database' do
+      trusted = FakeAuthUser.new('advisorybirdMar', 'advisorybirdMar!spam@vpn.example', true)
+      plugin.track_join(FakeMessage.new(trusted, channel, nil))
+      plugin.check_first_message(FakeMessage.new(trusted, channel, JOIN_RACE_MESSAGE))
+
+      expect(channel.bans).to be_empty
     end
 
     it 'bans and kicks the sample spammer once enough signals accumulate' do

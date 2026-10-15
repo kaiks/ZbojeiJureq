@@ -48,7 +48,8 @@ CONFIG = {
     'opentelemetry_service_name' => 'zbojeijureq',
     # Users the first-message spam filter never bans. Plain nicks ('Osk-') or
     # nick!ident@host masks with * and ? wildcards ('*!~dsaf@*'). Users with an
-    # access level in the bot database and channel ops are skipped anyway.
+    # access level in the bot database, saved weather registrations, and
+    # channel ops are skipped anyway.
     # The comma-separated SPAM_FILTER_WHITELIST environment variable takes
     # precedence.
     'spam_filter_whitelist' => ['*!*@*.users.quakenet.org']

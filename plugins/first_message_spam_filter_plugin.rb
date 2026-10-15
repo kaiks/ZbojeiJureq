@@ -1,15 +1,17 @@
 # frozen_string_literal: true
 
 require 'set'
+require 'sequel'
 
 # FirstMessageSpamFilterPlugin
-# Detects and bans spam bots either right on JOIN (by nick/ident fingerprint)
-# or on their first messages (by content signals) as a fallback.
+# Logs suspicious nick/ident fingerprints on JOIN and bans spam bots based
+# on content signals in their first messages.
 #
 # Trusted users are never acted on:
 # - anyone matching CONFIG['spam_filter_whitelist'] (or the comma-separated
 #   SPAM_FILTER_WHITELIST environment variable, which takes precedence),
 # - anyone with an access level in the bot's own user database (.add ...),
+# - anyone with a saved weather registration (.w register ...),
 # - channel operators.
 class FirstMessageSpamFilterPlugin
   include Cinch::Plugin
@@ -28,7 +30,9 @@ class FirstMessageSpamFilterPlugin
   #   :ban – ban + kick immediately on JOIN
   #   :log – only log (dry run, to check for false positives)
   #   :off – disabled, rely on message filter only
-  JOIN_FINGERPRINT_ACTION = :ban
+  # This heuristic also matches ordinary users; collect evidence before
+  # enabling bans based on nick/ident alone.
+  JOIN_FINGERPRINT_ACTION = :log
 
   SIGNAL_PATTERNS = {
     target_name: [
@@ -63,6 +67,8 @@ class FirstMessageSpamFilterPlugin
 
   listen_to :join,    method: :track_join
   listen_to :channel, method: :check_first_message
+  listen_to :leaving, method: :stop_tracking
+  listen_to :disconnect, method: :reset_tracking
 
   module SpamSignals
     module_function
@@ -145,7 +151,7 @@ class FirstMessageSpamFilterPlugin
   end
 
   class DetectionWindow
-    Entry = Struct.new(:joined_at, :messages_seen, :signals, keyword_init: true)
+    Entry = Struct.new(:joined_at, :messages_seen, :signals, :provisional, :closed, keyword_init: true)
 
     def initialize(clock: -> { Time.now }, timeout: TRACKING_TIMEOUT, max_messages: MAX_MESSAGES_TO_SCAN,
                    threshold: SPAM_SIGNAL_THRESHOLD, instant_signals: INSTANT_SIGNALS,
@@ -162,18 +168,29 @@ class FirstMessageSpamFilterPlugin
 
     def track_join(channel_key, user_key, at: @clock.call)
       @mutex.synchronize do
-        cleanup(at)
-        @entries[[channel_key, user_key]] = Entry.new(joined_at: at, messages_seen: 0, signals: Set.new)
+        key = [channel_key, user_key]
+        entry = @entries[key]
+        if entry&.provisional
+          # A late JOIN must not discard signals or reopen a window that
+          # was already completed by the message handler.
+          entry.provisional = false
+        else
+          @entries[key] = Entry.new(joined_at: at, messages_seen: 0, signals: Set.new)
+        end
       end
     end
 
     def spam_detected?(channel_key, user_key, message, at: @clock.call)
       @mutex.synchronize do
-        cleanup(at)
-
         key = [channel_key, user_key]
-        signals = SpamSignals.for(message)
         entry = @entries[key]
+        return false if entry&.closed
+        if entry && (at - entry.joined_at) > @timeout
+          close(entry)
+          return false
+        end
+
+        signals = SpamSignals.for(message)
         if entry.nil?
           return false if signals.empty?
 
@@ -181,7 +198,7 @@ class FirstMessageSpamFilterPlugin
           # threads, so the first spam line can arrive before the join
           # tracker is visible. Create a provisional window from the
           # first suspicious message so the race does not drop the burst.
-          entry = Entry.new(joined_at: at, messages_seen: 0, signals: Set.new)
+          entry = Entry.new(joined_at: at, messages_seen: 0, signals: Set.new, provisional: true)
           @entries[key] = entry
         end
 
@@ -189,8 +206,24 @@ class FirstMessageSpamFilterPlugin
         entry.signals.merge(signals)
 
         detected = detected?(entry.signals)
-        forget(key) if detected || entry.messages_seen >= @max_messages
+        close(entry) if detected || entry.messages_seen >= @max_messages
         detected
+      end
+    end
+
+    def forget_user(user_key, channel_key: nil)
+      @mutex.synchronize do
+        @entries.delete_if { |(channel, user), _entry| user == user_key && (channel_key.nil? || channel == channel_key) }
+      end
+    end
+
+    def clear(channel_key: nil)
+      @mutex.synchronize do
+        if channel_key
+          @entries.delete_if { |(channel, _user), _entry| channel == channel_key }
+        else
+          @entries.clear
+        end
       end
     end
 
@@ -201,13 +234,11 @@ class FirstMessageSpamFilterPlugin
       signals.length >= threshold
     end
 
-    def cleanup(now)
-      expired_keys = @entries.select { |_key, entry| (now - entry.joined_at) > @timeout }.keys
-      expired_keys.each { |key| forget(key) }
-    end
-
-    def forget(key)
-      @entries.delete(key)
+    def close(entry)
+      # Keep a tombstone until departure/rejoin so the JOIN-race fallback
+      # cannot reopen a finished or expired scan.
+      entry.closed = true
+      entry.signals.clear
     end
   end
 
@@ -259,10 +290,22 @@ class FirstMessageSpamFilterPlugin
     return if bot_user?(m.user)
     return if trusted?(m.channel, m.user)
 
-    # Always track, so the message filter still works as a fallback
-    # if the join ban fails or the fingerprint misses.
+    # Content signals are still required when the JOIN heuristic only logs.
     @detector.track_join(channel_key(m.channel), user_key(m.user))
     handle_join_fingerprint(m)
+  end
+
+  def stop_tracking(m, user)
+    channel = channel_key(m.channel) if m.channel
+    if bot_user?(user)
+      @detector.clear(channel_key: channel)
+    else
+      @detector.forget_user(user_key(user), channel_key: channel)
+    end
+  end
+
+  def reset_tracking(_m)
+    @detector.clear
   end
 
   def check_first_message(m)
@@ -290,11 +333,20 @@ class FirstMessageSpamFilterPlugin
   end
 
   def trusted?(channel, user)
-    whitelisted?(user) || bot_authorized?(user) || channel_op?(channel, user)
+    whitelisted?(user) || weather_registered?(user) || bot_authorized?(user) || channel_op?(channel, user)
   end
 
   def whitelisted?(user)
     @whitelist&.include?(user.nick, user.respond_to?(:mask) ? user.mask : nil)
+  end
+
+  def weather_registered?(user)
+    return false unless bot.respond_to?(:db) && bot.db
+
+    bot.db[:weather].where(Sequel.function(:lower, :nick) => user.nick.downcase).any?
+  rescue StandardError => e
+    @moderator.log("Weather whitelist check failed for #{user.nick}: #{e.message}")
+    false
   end
 
   # Users added with .add nick/ident/host in AuthenticationPlugin.

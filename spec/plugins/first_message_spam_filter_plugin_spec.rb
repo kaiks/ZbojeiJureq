@@ -1,6 +1,7 @@
 require 'spec_helper'
 require 'cinch'
 require 'stringio'
+require_relative '../../extensions/authentication'
 require_relative '../../plugins/first_message_spam_filter_plugin'
 
 RSpec.describe FirstMessageSpamFilterPlugin do
@@ -20,31 +21,25 @@ RSpec.describe FirstMessageSpamFilterPlugin do
 
   JOIN_RACE_MESSAGE = "Hi Guys! It's Madeleine Czura! Just thought I'd leave my number here in case you're lonely ;) . You can reach me on +44-7599248843 or maddyczura@gmail.com or madeleine.czura@arcadis.com anytime! > Linkedin: uk.linkedin.com/in/maddy-czura Instagram: instagram.com/maddy_czura".freeze
 
-  FakeUser = Struct.new(:nick, :mask)
-  FakeIdentUser = Struct.new(:nick, :mask, :user)
-  FakeAuthUser = Struct.new(:nick, :mask, :authorized?)
-  FakeMessage = Struct.new(:user, :channel, :message)
-  FakeBot = Struct.new(:nick)
+  class SpamFilterBot < Cinch::Bot
+    def db
+      config.shared[:database]
+    end
+  end
 
-  class FakeChannel
-    attr_reader :name, :bans, :kicks
+  # Only the network boundary is replaced; messages, users, channels,
+  # authentication and moderation use the real Cinch implementation.
+  class SpamFilterWire
+    attr_reader :commands, :isupport, :network
 
-    def initialize(name)
-      @name = name
-      @bans = []
-      @kicks = []
+    def initialize
+      @commands = []
+      @isupport = Cinch::ISupport.new
+      @network = Cinch::Network.new(:unknown, :unknown)
     end
 
-    def ban(mask)
-      @bans << mask
-    end
-
-    def kick(user, reason)
-      @kicks << [user.nick, reason]
-    end
-
-    def to_s
-      name
+    def send(command)
+      @commands << command
     end
   end
 
@@ -96,9 +91,8 @@ RSpec.describe FirstMessageSpamFilterPlugin do
       detector.track_join('#kx', user_key, at: current_time)
       expired_time = current_time + FirstMessageSpamFilterPlugin::TRACKING_TIMEOUT + 1
 
-      detected = detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: expired_time)
-
-      expect(detected).to be(false)
+      expect(detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: expired_time)).to be(false)
+      expect(detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: expired_time + 3600)).to be(false)
     end
 
     it 'stops scanning after the configured first-message window' do
@@ -109,7 +103,32 @@ RSpec.describe FirstMessageSpamFilterPlugin do
         expect(short_window.spam_detected?('#kx', user_key, 'hello there', at: current_time)).to be(false)
       end
 
-      expect(short_window.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: current_time)).to be(false)
+      SPAM_TRANSCRIPT.each do |line|
+        expect(short_window.spam_detected?('#kx', user_key, line, at: current_time)).to be(false)
+      end
+    end
+
+    it 'starts a fresh scan when the user rejoins after the window closes' do
+      detector.track_join('#kx', user_key, at: current_time)
+      detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: current_time)
+
+      detector.track_join('#kx', user_key, at: current_time + 1)
+
+      expect(detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: current_time + 1)).to be(true)
+    end
+
+    it 'preserves provisional signals when the join callback arrives late' do
+      expect(detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[1], at: current_time)).to be(false)
+      detector.track_join('#kx', user_key, at: current_time)
+
+      expect(detector.spam_detected?('#kx', user_key, SPAM_TRANSCRIPT[4], at: current_time)).to be(true)
+    end
+
+    it 'does not reopen a detected provisional window when the join callback arrives late' do
+      expect(detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: current_time)).to be(true)
+      detector.track_join('#kx', user_key, at: current_time)
+
+      expect(detector.spam_detected?('#kx', user_key, JOIN_RACE_MESSAGE, at: current_time)).to be(false)
     end
 
     it 'bans on the first spam line when the target name comes with another signal' do
@@ -165,78 +184,222 @@ RSpec.describe FirstMessageSpamFilterPlugin do
     end
   end
 
-  describe '#track_join and #check_first_message' do
+  describe 'moderation through Cinch messages' do
     let(:current_time) { Time.utc(2026, 5, 4, 12, 0, 0) }
-    let(:plugin) { described_class.allocate }
     let(:log_io) { StringIO.new }
-    let(:channel) { FakeChannel.new('#kx') }
-    let(:user) { FakeUser.new('advisorybirdMar', 'advisorybirdMar!spam@vpn.example') }
-
-    before do
-      plugin.instance_variable_set(:@bot, FakeBot.new('ZbojeiJureq'))
-      plugin.instance_variable_set(:@detector, described_class::DetectionWindow.new(clock: -> { current_time }))
-      plugin.instance_variable_set(:@moderator, described_class::ChannelModerator.new(log_io: log_io))
-      plugin.instance_variable_set(:@whitelist, described_class::Whitelist.new(whitelist_entries))
+    let(:wire) { SpamFilterWire.new }
+    let(:bot) do
+      SpamFilterBot.new { loggers.clear }.tap do |instance|
+        instance.instance_variable_set(:@name, 'ZbojeiJureq')
+        instance.instance_variable_set(:@irc, wire)
+        instance.config.shared[:database] = database
+      end
+    end
+    let(:database) do
+      Sequel.sqlite.tap do |db|
+        db.create_table(:weather) do
+          String :nick, primary_key: true
+          String :weather_string
+        end
+        db.create_table(:user) do
+          primary_key :id
+          Integer :matchmethod
+          String :nick
+          String :address
+          Integer :accesslevel
+        end
+        db.create_table(:user_access) do
+          primary_key :id
+          Integer :level
+        end
+      end
+    end
+    let(:plugin) { described_class.new(bot) }
+    let(:nick) { 'rudebovidBrenna' }
+    let(:ident) { 'rudebovid' }
+    let(:prefix) { "#{nick}!~#{ident}@185.192.16.54" }
+    let(:join_message) { Cinch::Message.new(":#{prefix} JOIN :#kx", bot) }
+    let(:whitelist_entries) { [] }
+    let(:moderation_commands) do
+      ['MODE #kx +b *!*@185.192.16.54', "KICK #kx #{nick} :Spam detected (automated ban)"]
     end
 
-    let(:whitelist_entries) { [] }
-    let(:spam_bot) { FakeIdentUser.new('rudebovidBrenna', 'rudebovidBrenna!~rudebovid@185.192.16.54', '~rudebovid') }
+    def channel_message(text, channel: '#kx')
+      Cinch::Message.new(":#{prefix} PRIVMSG #{channel} :#{text}", bot)
+    end
 
-    it 'bans a spam bot right on join by its nick/ident fingerprint' do
-      plugin.track_join(FakeMessage.new(spam_bot, channel, nil))
+    around do |example|
+      original_stdout = $stdout
+      $stdout = log_io
+      example.run
+    ensure
+      $stdout = original_stdout
+    end
 
-      expect(channel.bans).to eq(['*!*@185.192.16.54'])
-      expect(channel.kicks).to eq([['rudebovidBrenna', 'Spam detected (automated ban)']])
-      expect(log_io.string).to include('[join fingerprint]')
+    before do
+      Timecop.freeze(current_time)
+      stub_const('CONFIG', { 'spam_filter_whitelist' => whitelist_entries })
+    end
+
+    after do
+      plugin.unregister
+      database.disconnect
+    end
+
+    it 'only logs a suspicious nick/ident on join' do
+      plugin.track_join(join_message)
+
+      expect(wire.commands).to be_empty
+      expect(log_io.string).to include('JOIN FINGERPRINT MATCH (dry run)')
+    end
+
+    context 'with an ordinary matching nickname' do
+      let(:nick) { 'alexandermiller' }
+      let(:ident) { 'alexander' }
+
+      it 'does not ban the user for joining and greeting the channel' do
+        plugin.track_join(join_message)
+        plugin.check_first_message(channel_message('hello everyone'))
+
+        expect(wire.commands).to be_empty
+      end
     end
 
     context 'with a whitelisted user' do
-      let(:whitelist_entries) { ['rudebovidBrenna'] }
+      let(:whitelist_entries) { [nick] }
 
-      it 'does not ban on join or on spam-looking messages' do
-        plugin.track_join(FakeMessage.new(spam_bot, channel, nil))
-        SPAM_TRANSCRIPT.each { |line| plugin.check_first_message(FakeMessage.new(spam_bot, channel, line)) }
+      it 'does not act on join or on spam-looking messages' do
+        plugin.track_join(join_message)
+        SPAM_TRANSCRIPT.each { |line| plugin.check_first_message(channel_message(line)) }
 
-        expect(channel.bans).to be_empty
-        expect(channel.kicks).to be_empty
+        expect(wire.commands).to be_empty
+        expect(log_io.string).not_to include('JOIN FINGERPRINT MATCH')
       end
     end
 
-    it 'skips users with an access level in the bot database' do
-      trusted = FakeAuthUser.new('advisorybirdMar', 'advisorybirdMar!spam@vpn.example', true)
-      plugin.track_join(FakeMessage.new(trusted, channel, nil))
-      plugin.check_first_message(FakeMessage.new(trusted, channel, JOIN_RACE_MESSAGE))
+    it 'authorizes a registered bot account before deciding whether to ban' do
+      database[:user_access].insert(id: 1, level: 1)
+      database[:user].insert(matchmethod: 0, nick: nick, accesslevel: 1)
+      expect(join_message.user.authorized?).to be(false)
 
-      expect(channel.bans).to be_empty
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+
+      expect(wire.commands).to be_empty
+      expect(join_message.user.authorized?).to be(true)
     end
 
-    it 'bans and kicks the sample spammer once enough signals accumulate' do
-      plugin.track_join(FakeMessage.new(user, channel, nil))
+    it 'trusts a saved weather registration even when the nick changes case' do
+      database[:weather].insert(nick: nick.upcase, weather_string: 'Berlin')
 
-      SPAM_TRANSCRIPT.each do |line|
-        plugin.check_first_message(FakeMessage.new(user, channel, line))
-        break unless channel.bans.empty?
-      end
+      plugin.track_join(join_message)
+      SPAM_TRANSCRIPT.each { |line| plugin.check_first_message(channel_message(line)) }
 
-      expect(channel.bans).to eq(['*!*@vpn.example'])
-      expect(channel.kicks).to eq([['advisorybirdMar', 'Spam detected (automated ban)']])
-      expect(log_io.string).to include('SPAM DETECTED from advisorybirdMar')
+      expect(wire.commands).to be_empty
+      expect(log_io.string).not_to include('JOIN FINGERPRINT MATCH')
+    end
+
+    it 'does not treat underscores in weather registrations as wildcards' do
+      database[:weather].insert(nick: 'rudebovid_renna', weather_string: 'Berlin')
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(SPAM_TRANSCRIPT.first))
+
+      expect(wire.commands).to eq(moderation_commands)
+    end
+
+    it 'trusts channel operators' do
+      join_message.channel.add_user(join_message.user, ['o'])
+
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+
+      expect(wire.commands).to be_empty
+    end
+
+    it 'bans and kicks a spammer once, starting with the first spam line' do
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(SPAM_TRANSCRIPT.first))
+      expect(wire.commands).to eq(moderation_commands)
+
+      SPAM_TRANSCRIPT.drop(1).each { |line| plugin.check_first_message(channel_message(line)) }
+
+      expect(wire.commands).to eq(moderation_commands)
+      expect(log_io.string).to include('[message signals]')
     end
 
     it 'still bans when the first message arrives before join tracking completes' do
-      plugin.check_first_message(FakeMessage.new(user, channel, JOIN_RACE_MESSAGE))
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
 
-      expect(channel.bans).to eq(['*!*@vpn.example'])
-      expect(channel.kicks).to eq([['advisorybirdMar', 'Spam detected (automated ban)']])
+      expect(wire.commands).to eq(moderation_commands)
     end
 
-    it 'does not act on the bot itself joining' do
-      bot_user = FakeUser.new('ZbojeiJureq', 'ZbojeiJureq!bot@localhost')
-      plugin.track_join(FakeMessage.new(bot_user, channel, nil))
-      plugin.check_first_message(FakeMessage.new(bot_user, channel, SPAM_TRANSCRIPT.first))
+    it 'does not ban after the first-message limit is reached' do
+      plugin.track_join(join_message)
+      described_class::MAX_MESSAGES_TO_SCAN.times do
+        plugin.check_first_message(channel_message('hello there'))
+      end
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
 
-      expect(channel.bans).to be_empty
-      expect(channel.kicks).to be_empty
+      expect(wire.commands).to be_empty
+    end
+
+    it 'does not ban after the tracking timeout has elapsed' do
+      plugin.track_join(join_message)
+      Timecop.travel(current_time + described_class::TRACKING_TIMEOUT + 1)
+      2.times { plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE)) }
+
+      expect(wire.commands).to be_empty
+    end
+
+    it 'starts a new provisional scan after the user is kicked and rejoins' do
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+      wire.commands.clear
+      kick = Cinch::Message.new(":Operator!op@ops.example KICK #kx #{nick} :bye", bot)
+      plugin.stop_tracking(kick, join_message.user)
+
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+
+      expect(wire.commands).to eq(moderation_commands)
+    end
+
+    it 'clears the channel windows of a quitting user' do
+      plugin.track_join(join_message)
+      plugin.track_join(Cinch::Message.new(":#{prefix} JOIN :#other", bot))
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE, channel: '#other'))
+      wire.commands.clear
+      quit = Cinch::Message.new(":#{prefix} QUIT :bye", bot)
+      plugin.stop_tracking(quit, join_message.user)
+
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE, channel: '#other'))
+
+      expect(wire.commands).to eq(moderation_commands + moderation_commands.map { |command| command.sub('#kx', '#other') })
+    end
+
+    it 'clears stale scan windows when the bot disconnects' do
+      plugin.track_join(join_message)
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+      wire.commands.clear
+      plugin.reset_tracking(nil)
+
+      plugin.check_first_message(channel_message(JOIN_RACE_MESSAGE))
+
+      expect(wire.commands).to eq(moderation_commands)
+    end
+
+    context 'with the bot itself joining' do
+      let(:nick) { 'ZbojeiJureq' }
+
+      it 'does not act on the bot' do
+        plugin.track_join(join_message)
+        plugin.check_first_message(channel_message(SPAM_TRANSCRIPT.first))
+
+        expect(wire.commands).to be_empty
+      end
     end
   end
 end

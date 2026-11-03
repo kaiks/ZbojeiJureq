@@ -52,7 +52,6 @@ GEM
       ffi-compiler (~> 1.0)
       rake (~> 13.0)
     logger (1.7.0)
-    mini_portile2 (2.8.9)
     monitor (0.2.0)
     net-ftp (0.3.8)
       net-protocol
@@ -99,8 +98,7 @@ GEM
     rspec-support (3.13.4)
     sequel (5.93.0)
       bigdecimal
-    sqlite3 (2.7.0)
-      mini_portile2 (~> 2.8.0)
+    sqlite3 (2.9.6-x86_64-linux-gnu)
     time (0.4.1)
       date
     timecop (0.9.10)

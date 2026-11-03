@@ -20,7 +20,7 @@ GEM
     bigdecimal (3.2.2)
     cinch-identify (1.7.0)
       cinch (~> 2.0)
-    concurrent-ruby (1.3.5)
+    concurrent-ruby (1.3.7)
     crack (1.0.0)
       bigdecimal
       rexml

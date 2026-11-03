@@ -1,3 +1,5 @@
+require 'time'
+
 class Note < Sequel::Model(:note)
   dataset_module do
     def from(nick)
@@ -82,15 +84,25 @@ class NotePlugin
   end
 
   def time_parse(hour, date = nil)
-    if !date.nil?
-      result = Time.parse("#{date} #{hour}") rescue nil
-      raise 'Wrong date format. The correct format is dd.mm.YYYY HH:MM' if date.nil?
-      return result
+    if date
+      time = Time.strptime("#{date} #{hour}", '%d.%m.%Y %H:%M')
+      day, month, year = date.split('.').map(&:to_i)
+      hours, minutes = hour.split(':').map(&:to_i)
+      expected = [year, month, day, hours, minutes]
+      actual = [time.year, time.month, time.day, time.hour, time.min]
+      raise ArgumentError unless actual == expected
+
+      return time
     end
 
-    time = Time.parse(hour) rescue nil
-    raise 'Wrong time format. The correct format is HH:MM' if time.nil?
+    time = Time.strptime(hour, '%H:%M')
     time > Time.now ? time : Time.parse("#{Date.today + 1} #{hour}")
+  rescue ArgumentError
+    if date
+      raise 'Wrong date format. The correct format is dd.mm.YYYY HH:MM'
+    end
+
+    raise 'Wrong time format. The correct format is HH:MM'
   end
 
   def timenote(m, date, hour, recipient, message)
@@ -130,13 +142,21 @@ class NotePlugin
   end
 
   def notify(m)
-    user_notes = Note.where(status: 0)
-                     .for(m.user.to_s)
-                     .due
-                     .order(:posted)
-    return if user_notes.empty?
+    delivery_mutex.synchronize do
+      user_notes = Note.where(status: 0)
+                       .for(m.user.to_s)
+                       .due
+                       .order(:posted)
+      return if user_notes.empty?
 
-    send_notes(m, user_notes.all)
-    user_notes.update(status: 1)
+      send_notes(m, user_notes.all)
+      user_notes.update(status: 1)
+    end
+  end
+
+  private
+
+  def delivery_mutex
+    @delivery_mutex ||= Mutex.new
   end
 end

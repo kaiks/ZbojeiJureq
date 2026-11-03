@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!Gemfile
+!Gemfile.lock
+!main.rb
+!extensions/
+!extensions/**
+!plugins/
+!plugins/**
+!en_dict.txt
+!ez.txt
+!tools/
+!tools/ripgrep_14.1.1-1_amd64.deb

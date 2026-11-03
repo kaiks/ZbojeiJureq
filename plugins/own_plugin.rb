@@ -1,3 +1,5 @@
+require 'time'
+
 module OwnConfig
   KICKS = 5
   TIME_LIMIT = 300
@@ -13,8 +15,11 @@ class OwnRecord < Sequel::Model(:own)
   end
 
   def time
-    last_owned_time ||= (Date.today - 1337).to_s
+    return Time.at(0) if last_owned_time.nil? || last_owned_time.empty?
+
     Time.parse(last_owned_time)
+  rescue ArgumentError
+    Time.at(0)
   end
 end
 
@@ -54,43 +59,37 @@ class OwnPlugin
   def own(m, nick)
     return unless m.user.level > 0
 
-    owner = OwnRecord.where(:nick => m.user.nick).first
-    if owner.nil?
-      OwnRecord.create( :nick => nick,
-                        :owning_times => 1
-      )
-    else
-      owner.owning_times += 1
-      owner.save
-    end
+    owner = OwnRecord.find_or_create(nick: m.user.nick)
+    owned = OwnRecord.find_or_create(nick: nick)
 
-    owned = OwnRecord.where(nick: nick).first
-
-    if owned.nil?
-      OwnRecord.create(nick: nick,
-                        last_owned_time: Time.now,
-                        last_owned_by: m.user.nick,
-                        own_stage: OwnConfig::KICKS,
-                        owned_times: 1)
-    elsif (Time.now - owned.time).to_i > OwnConfig::TIME_LIMIT
-        owned.owned_times += 1
-        owned.last_owned_time = Time.now
-        owned.own_stage = OwnConfig::KICKS
-        owned.last_owned_by = m.user.nick
-        owned.save
-        user = m.channel.get_user(nick)
-        m.channel.kick(user, "#1")
-    else
-      owner.owning_times -= 1
-      owner.save
+    if (Time.now - owned.time).to_i <= OwnConfig::TIME_LIMIT
       m.reply "Daj mu juz spokoj #{m.user.nick} :("
+      return
     end
+
+    OwnRecord.db.transaction do
+      owner.update(owning_times: owner.owning_times.to_i + 1)
+      owned.update(
+        owned_times: owned.owned_times.to_i + 1,
+        last_owned_time: Time.now,
+        last_owned_by: m.user.nick,
+        own_stage: OwnConfig::KICKS
+      )
+    end
+
+    user = m.channel.get_user(nick)
+    m.channel.kick(user, '#1') if user
   end
 
 
   def unown(m, nick)
     return unless m.user.nick == nick || m.user.level > 0
     owned = OwnRecord.where(nick: nick).first
+    unless owned
+      m.reply "#{nick} is not currently owned."
+      return
+    end
+
     owned.own_stage = 0
     owned.save
     m.reply "Done."

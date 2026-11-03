@@ -84,6 +84,8 @@ module Cinch
       end
 
       def set_option(m, plugin, option, value)
+        return unless m.user.has_admin_access?
+
         begin
           const = Cinch::Plugins.const_get(plugin)
         rescue NameError

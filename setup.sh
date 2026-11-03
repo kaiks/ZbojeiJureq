@@ -3,6 +3,11 @@
 # Exit on error
 set -e
 
+if [ ! -f config.rb ]; then
+    echo "Missing config.rb; copy config.rb.template and configure it before deployment."
+    exit 1
+fi
+
 # Function to copy .db.template files if corresponding .db files do not exist
 copy_db_templates() {
     find . -name '*.db.template' -exec sh -c 'mkdir -p ./db; target="./db/$(basename "$1" .template)"; [ ! -f "$target" ] && cp "$1" "$target"' _ {} \;
@@ -23,7 +28,7 @@ docker container rm -f zbojeijureq 2>/dev/null || true
 
 # Rebuild the Docker image
 echo "Building Docker image..."
-docker build -t zbojeijureq .
+docker build --build-arg "APP_UID=$(id -u)" -t zbojeijureq .
 
 # Copy database templates
 echo "Setting up database templates..."
@@ -62,6 +67,7 @@ if [[ "$(uname)" =~ NT ]]; then
         -v "$container_path/db":"/ZbojeiJureq/db":Z \
         -v "$container_path/logs":"/ZbojeiJureq/logs":Z \
         -v "$container_path/www/logs":"/log_upload":Z \
+        -v "$container_path/config.rb":"/ZbojeiJureq/config.rb":ro,Z \
         zbojeijureq
 else
     echo "Starting container..."
@@ -69,6 +75,7 @@ else
         --mount type=bind,source="$db_dir",target=/ZbojeiJureq/db \
         --mount type=bind,source="$logs_dir",target=/ZbojeiJureq/logs \
         --mount type=bind,source="$www_logs_dir",target=/log_upload \
+        --mount type=bind,source="$container_path/config.rb",target=/ZbojeiJureq/config.rb,readonly \
         zbojeijureq
 fi
 

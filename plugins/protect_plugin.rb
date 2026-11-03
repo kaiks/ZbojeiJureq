@@ -3,8 +3,8 @@ class ProtectPlugin
 
   self.prefix = '.'
 
-  listen_to :deop,    method: :unban
-  listen_to :ban,     method: :ban
+  listen_to :deop,    method: :reop
+  listen_to :ban,     method: :unban_protected_user
   listen_to :join,    method: :join
 
   match /op\z/, method: :op_self
@@ -37,20 +37,32 @@ class ProtectPlugin
   end
 
   def voice_channel(m, channel)
+    return unless m.user.has_admin_access?
     Channel(channel).voice(m.user)
   end
 
   def voice_user(m, user)
+    return unless m.user.has_admin_access?
     m.channel.voice(m.channel.get_user(user))
   end
 
-  def kick(m, user)
+  def kick_user(m, user)
     return unless m.user.has_admin_access?
     m.channel.kick(m.channel.get_user(user))
   end
 
-  def ban(m, ban)
-    return unless m.user.has_admin_access?
+  def reop(m, user)
+    return unless user.op?
+
+    m.channel.op(user)
+  end
+
+  def unban_protected_user(m, ban)
+    protected_user = m.channel.users.keys.any? do |user|
+      user.authorized? && ban.match(user)
+    end
+    return unless protected_user
+
     m.channel.unban(ban.mask)
   end
 

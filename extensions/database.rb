@@ -1,10 +1,11 @@
+DATABASE_DIRECTORY = File.expand_path('../db', __dir__).freeze
+
+def sqlite_path(filename)
+  File.join(DATABASE_DIRECTORY, filename)
+end
+
 def sqlite_load(filename)
-  driver_prefix = if RUBY_PLATFORM == 'java'
-                    'jdbc:sqlite:'
-                  else
-                    'sqlite://'
-                  end
-  Sequel.sqlite("db/" + filename)
+  Sequel.sqlite(sqlite_path(filename))
 end
 
 DB = sqlite_load('ZbojeiJureq.db')

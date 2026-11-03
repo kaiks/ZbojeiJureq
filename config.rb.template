@@ -8,13 +8,22 @@ CONFIG = {
     'channels'              => ['#kx'],
     'server'                => 'localhost',
     'verbose'               => true,
-    'message_per_second'    => 1,
+    'messages_per_second'   => 1,
 
     'disable_autoload'      => false,
 
     'talkdb_upload_delay'   => 3600,
     'maindb_upload_delay'   => 3600,
     'nick_check_delay'      => 300,
+
+    # Default-deny allowlist for automated Uno players. The comma-separated
+    # UNO_MACHINE_ALLOWLIST environment variable takes precedence.
+    'uno_machine_allowlist' => [],
+
+    # In a two-player game, make Reverse skip the opponent and leave the turn
+    # with the player who used it. UNO_TWO_PLAYER_REVERSE_ACTS_AS_SKIP takes
+    # precedence and accepts true/false, yes/no, on/off, or 1/0.
+    'uno_two_player_reverse_acts_as_skip' => false,
 
     'ftp_upload'            => false,
     'ftp_login'             => '',
@@ -33,14 +42,15 @@ CONFIG = {
     # BTC Plugin configuration (optional)
     # 'btc_channel'           => '#kx',  # Channel for BTC price updates (default: #kx)
     
-    'use_rollbar'           => false,
-    'rollbar_api_key'       => 'YOUR_API_KEY'
+    # Exports error spans using the standard OTEL_EXPORTER_OTLP_* environment
+    # variables when enabled.
+    'use_opentelemetry'     => false,
+    'opentelemetry_service_name' => 'zbojeijureq',
+    # Users the first-message spam filter never bans. Plain nicks ('Osk-') or
+    # nick!ident@host masks with * and ? wildcards ('*!~dsaf@*'). Users with an
+    # access level in the bot database, saved weather registrations, and
+    # channel ops are skipped anyway.
+    # The comma-separated SPAM_FILTER_WHITELIST environment variable takes
+    # precedence.
+    'spam_filter_whitelist' => ['*!*@*.users.quakenet.org']
 }
-
-if CONFIG['use_rollbar']
-  require 'rollbar'
-
-  Rollbar.configure do |config|
-    config.access_token = CONFIG['rollbar_api_key']
-  end
-end

@@ -1,4 +1,8 @@
 # encoding: utf-8
+require 'json'
+require 'net/http'
+require 'uri'
+
 require './config.rb'
 
 class WeatherUser < Sequel::Model(DB[:weather])
@@ -8,9 +12,11 @@ end
 class WeatherPlugin
   include Cinch::Plugin
 
+  class ApiError < StandardError; end
+
   self.prefix = '.'
   OPTIONS = { units: "metric", APPID: CONFIG['openweathermap_api_key'] }.freeze
-  API_ENDPOINT_URL = "http://api.openweathermap.org/data/2.5/weather".freeze
+  API_ENDPOINT_URL = "https://api.openweathermap.org/data/2.5/weather".freeze
 
   match /w register (.*)/i,     method: :register, group: :weathergroup
   match /w help/i,              method: :help, group: :weathergroup
@@ -22,9 +28,7 @@ class WeatherPlugin
   end
 
   def weather(m, city)
-    weather_string = weather_for(city)
-    return unless weather_string.length > 0
-    m.reply weather_string
+    reply_with_weather(m, city)
   end
 
   def register(m, location)
@@ -41,7 +45,7 @@ class WeatherPlugin
       m.reply "No location registered for #{m.user.nick}"
       return
     end
-    m.reply weather_for(user_location)
+    reply_with_weather(m, user_location)
   end
 
   def help(m)
@@ -55,6 +59,12 @@ class WeatherPlugin
     parse_weather_results(query_hash)
   end
 
+  def reply_with_weather(message, location)
+    message.reply weather_for(location)
+  rescue ApiError => e
+    message.reply "Weather lookup failed: #{e.message}"
+  end
+
   def api_url_for(location)
     query_params = OPTIONS.merge(q: location)
     encoded_params = URI.encode_www_form(query_params)
@@ -62,8 +72,24 @@ class WeatherPlugin
   end
 
   def weather_query(location)
-    raw_data = open(api_url_for(location)).read
-    JSON.parse(raw_data)
+    uri = URI(api_url_for(location))
+    response = Net::HTTP.start(
+      uri.host,
+      uri.port,
+      use_ssl: uri.scheme == 'https',
+      open_timeout: 5,
+      read_timeout: 5
+    ) { |http| http.get(uri.request_uri) }
+
+    unless response.is_a?(Net::HTTPSuccess)
+      raise ApiError, "service returned HTTP #{response.code}"
+    end
+
+    JSON.parse(response.body)
+  rescue JSON::ParserError
+    raise ApiError, 'service returned an invalid response'
+  rescue SystemCallError, Timeout::Error, SocketError
+    raise ApiError, 'service is unavailable'
   end
 
   def parse_weather_results(weather_hash)
